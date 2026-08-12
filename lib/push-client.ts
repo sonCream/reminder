@@ -51,6 +51,31 @@ export async function currentSubscription(): Promise<PushSubscription | null> {
   return (await registration?.pushManager.getSubscription()) ?? null
 }
 
+/**
+ * 브라우저에 구독이 있으면 서버에도 있는지 확인해 다시 등록한다.
+ *
+ * 브라우저와 서버 중 한쪽에만 구독이 남는 상황이 실제로 생긴다.
+ * 만료 응답(410)을 받아 서버가 구독을 지웠거나, 등록 요청이 실패했는데
+ * 브라우저 구독은 남은 경우다. 그러면 화면은 "구독 정상"이라고 표시하면서
+ * 알림은 오지 않고, 이미 켜져 있으니 사용자가 다시 켤 수도 없다.
+ *
+ * 앱을 열 때마다 조용히 다시 등록해서 그 상태에서 스스로 빠져나오게 한다.
+ * 서버는 endpoint 기준 upsert 라 몇 번을 보내도 중복이 생기지 않는다.
+ */
+export async function syncSubscription(): Promise<void> {
+  try {
+    const subscription = await currentSubscription()
+    if (!subscription) return
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(subscription.toJSON()),
+    })
+  } catch {
+    // 실패해도 앱 사용에는 지장이 없다. 다음에 열 때 다시 시도한다.
+  }
+}
+
 export async function enablePush(): Promise<PushResult> {
   if (!('serviceWorker' in navigator)) {
     // HTTPS가 아니면 서비스 워커 자체가 등록되지 않는다. 폰 테스트에서 가장 흔한 원인.

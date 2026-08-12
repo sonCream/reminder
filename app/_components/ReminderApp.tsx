@@ -10,7 +10,7 @@ import {
   timeLabel,
   type Bucket,
 } from '@/lib/time'
-import { registerServiceWorker } from '@/lib/push-client'
+import { registerServiceWorker, syncSubscription } from '@/lib/push-client'
 import { SwipeRow } from './SwipeRow'
 import { EditScreen, type EditPayload } from './EditScreen'
 import { SettingsScreen } from './SettingsScreen'
@@ -54,8 +54,13 @@ export function ReminderApp() {
 
   // 서비스 워커는 앱을 열 때마다 등록해 둔다.
   // 이미 알림을 켜둔 기기가 브라우저 업데이트 등으로 워커를 잃었을 때 스스로 복구된다.
+  // 이어서 구독을 서버에 다시 등록한다 — 브라우저에만 구독이 남아
+  // "화면은 정상인데 알림은 안 오는" 상태에서 스스로 빠져나오게 하는 장치다.
   useEffect(() => {
-    void registerServiceWorker()
+    void (async () => {
+      await registerServiceWorker()
+      await syncSubscription()
+    })()
   }, [])
 
   const load = useCallback(async (which: View) => {
