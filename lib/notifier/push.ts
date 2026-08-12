@@ -51,16 +51,25 @@ export class PushNotifier implements Notifier {
       ),
     )
 
-    // 만료된 구독(404/410)은 정리한다. 안 그러면 매번 실패로 남는다.
+    // 기기별 결과를 반드시 남긴다.
+    // 한 대라도 성공하면 '발송됨'으로 처리하기 때문에, 여기서 찍지 않으면
+    // "아이폰은 오는데 안드로이드만 안 온다" 같은 상황이 로그에 흔적조차 남지 않는다.
     const dead: string[] = []
     results.forEach((r, i) => {
-      if (r.status === 'rejected') {
-        const code = (r.reason as { statusCode?: number })?.statusCode
-        if (code === 404 || code === 410) dead.push(subs[i].endpoint)
+      const host = hostOf(subs[i].endpoint)
+      if (r.status === 'fulfilled') {
+        console.log(`[push] 성공 ${host}`)
+        return
       }
+      const reason = r.reason as { statusCode?: number; body?: string } | undefined
+      console.error(`[push] 실패 ${host} status=${reason?.statusCode ?? '?'} ${reason?.body ?? r.reason}`)
+      // 만료된 구독(404/410)은 정리한다. 안 그러면 매번 실패로 남는다.
+      if (reason?.statusCode === 404 || reason?.statusCode === 410) dead.push(subs[i].endpoint)
     })
+
     if (dead.length) {
       await prisma.pushSubscription.deleteMany({ where: { endpoint: { in: dead } } })
+      console.warn(`[push] 만료된 구독 ${dead.length}건 삭제`)
     }
 
     // 한 기기라도 성공했으면 발송으로 본다.
@@ -68,5 +77,14 @@ export class PushNotifier implements Notifier {
       const first = results.find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined
       throw new Error(`모든 기기 발송 실패: ${first?.reason}`)
     }
+  }
+}
+
+/// 로그에 어느 기기인지 드러나게 한다. apple 이면 iPhone, fcm 이면 안드로이드다.
+function hostOf(endpoint: string): string {
+  try {
+    return new URL(endpoint).host
+  } catch {
+    return '알 수 없음'
   }
 }
