@@ -31,6 +31,13 @@ self.addEventListener('push', (event) => {
         // 같은 리마인더의 알림이 여러 개 쌓이지 않게 한다.
         tag: `reminder-${data.reminderId ?? 'x'}`,
         renotify: true,
+        // 사용자가 확인하기 전에 저절로 사라지지 않게 한다.
+        // 리마인더는 놓치면 의미가 없다.
+        //
+        // 화면 위로 튀어나오는 팝업(heads-up) 여부는 여기서 정할 수 없다.
+        // 안드로이드는 알림 채널의 중요도를 보고 OS 가 결정하며,
+        // 그 값은 사용자가 시스템 설정에서만 바꿀 수 있다.
+        requireInteraction: true,
         data: { url: data.url || '/' },
       })
 
