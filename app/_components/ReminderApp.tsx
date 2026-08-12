@@ -11,6 +11,7 @@ import {
   type Bucket,
 } from '@/lib/time'
 import { registerServiceWorker } from '@/lib/push-client'
+import { SwipeRow } from './SwipeRow'
 import { EditScreen, type EditPayload } from './EditScreen'
 import { SettingsScreen } from './SettingsScreen'
 import * as I from './icons'
@@ -38,6 +39,8 @@ export function ReminderApp() {
   const [view, setView] = useState<View>('active')
   const [tab, setTab] = useState<Tab>('list')
   const [openId, setOpenId] = useState<number | null>(null)
+  /// 좌로 밀어 복제·삭제 버튼이 열려 있는 행. 한 번에 하나만 열린다.
+  const [swipeId, setSwipeId] = useState<number | null>(null)
   const [collapsed, setCollapsed] = useState<Partial<Record<Bucket, boolean>>>({})
   const [editing, setEditing] = useState<EditTarget>(null)
   const [editOpen, setEditOpen] = useState(false)
@@ -108,6 +111,23 @@ export function ReminderApp() {
 
   const remove = (id: number) =>
     mutate(() => fetch(`/api/reminders/${id}`, { method: 'DELETE' }))
+
+  /// 같은 내용으로 한 건 더 만든다. 비슷한 리마인더를 만들 때 처음부터 입력하지 않아도 된다.
+  const clone = (r: ReminderDTO) =>
+    mutate(() =>
+      fetch('/api/reminders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: r.title,
+          memo: r.memo,
+          remindAt: r.remindAt,
+          repeatRule: r.repeatRule,
+          leadMinutes: r.leadMinutes,
+          snoozeMinutes: r.snoozeMinutes,
+        }),
+      }),
+    )
 
   function openEdit(target: ReminderDTO | 'new') {
     setOpenId(null)
@@ -202,11 +222,20 @@ export function ReminderApp() {
                           reminder={r}
                           now={now}
                           open={openId === r.id}
+                          swipeOpen={swipeId === r.id}
                           busy={busy}
                           onToggle={() => toggleDone(r)}
-                          onTap={() => setOpenId(openId === r.id ? null : r.id)}
+                          onTap={() => {
+                            setSwipeId(null)
+                            setOpenId(openId === r.id ? null : r.id)
+                          }}
+                          onSwipeChange={(v) => {
+                            setSwipeId(v ? r.id : null)
+                            if (v) setOpenId(null)
+                          }}
                           onShift={(m) => shift(r.id, m)}
                           onEdit={() => openEdit(r)}
+                          onClone={() => clone(r)}
                           onDelete={() => remove(r.id)}
                         />
                       ))}
@@ -256,15 +285,21 @@ interface RowProps {
   reminder: ReminderDTO
   now: Date
   open: boolean
+  swipeOpen: boolean
   busy: boolean
   onToggle: () => void
   onTap: () => void
+  onSwipeChange: (open: boolean) => void
   onShift: (minutes: number) => void
   onEdit: () => void
+  onClone: () => void
   onDelete: () => void
 }
 
-function Row({ reminder, now, open, busy, onToggle, onTap, onShift, onEdit, onDelete }: RowProps) {
+function Row({
+  reminder, now, open, swipeOpen, busy,
+  onToggle, onTap, onSwipeChange, onShift, onEdit, onClone, onDelete,
+}: RowProps) {
   const at = new Date(reminder.remindAt)
   const done = reminder.doneAt !== null
   const late = !done && at < now
@@ -272,29 +307,37 @@ function Row({ reminder, now, open, busy, onToggle, onTap, onShift, onEdit, onDe
 
   return (
     <>
-      <div className={`row${done ? ' is-done' : ''}${late ? ' is-late' : ''}${soon ? ' is-soon' : ''}${open ? ' open' : ''}`}>
-        <button className="check" aria-label={done ? '완료 해제' : '완료로 표시'} onClick={onToggle} disabled={busy}>
-          {done ? <I.RingCheck /> : <I.Ring />}
-        </button>
+      <SwipeRow
+        open={swipeOpen}
+        onOpenChange={onSwipeChange}
+        onClone={onClone}
+        onDelete={onDelete}
+        disabled={busy}
+      >
+        <div className={`row${done ? ' is-done' : ''}${late ? ' is-late' : ''}${soon ? ' is-soon' : ''}${open ? ' open' : ''}`}>
+          <button className="check" aria-label={done ? '완료 해제' : '완료로 표시'} onClick={onToggle} disabled={busy}>
+            {done ? <I.RingCheck /> : <I.Ring />}
+          </button>
 
-        <button className="row-tap" onClick={onTap}>
-          <span className="row-top">
-            <span className="row-time">{timeLabel(at, now)}</span>
-            <span className="row-rel">{relLabel(at, now)}</span>
-          </span>
-          <span className="row-title">{reminder.title}</span>
-          {(reminder.repeatRule || reminder.memo) && (
-            <span className="row-sub">
-              {reminder.repeatRule && (
-                <span className="sub-item"><I.Repeat />{reminder.repeatRule}</span>
-              )}
-              {reminder.memo && (
-                <span className="sub-item"><I.Note />메모</span>
-              )}
+          <button className="row-tap" onClick={onTap}>
+            <span className="row-top">
+              <span className="row-time">{timeLabel(at, now)}</span>
+              <span className="row-rel">{relLabel(at, now)}</span>
             </span>
-          )}
-        </button>
-      </div>
+            <span className="row-title">{reminder.title}</span>
+            {(reminder.repeatRule || reminder.memo) && (
+              <span className="row-sub">
+                {reminder.repeatRule && (
+                  <span className="sub-item"><I.Repeat />{reminder.repeatRule}</span>
+                )}
+                {reminder.memo && (
+                  <span className="sub-item"><I.Note />메모</span>
+                )}
+              </span>
+            )}
+          </button>
+        </div>
+      </SwipeRow>
 
       {open && (
         <div className="quick">

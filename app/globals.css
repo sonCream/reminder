@@ -134,6 +134,29 @@ button:active { opacity:.55; }
 .row.is-done .row-title { text-decoration:line-through; color:var(--faint); }
 .row.is-done .row-time, .row.is-done .row-rel { color:var(--faint); }
 
+/* ---- 좌로 밀면 나오는 복제·삭제 ---- */
+.swipe { position:relative; overflow:hidden; }
+
+.swipe-actions { position:absolute; top:0; right:0; bottom:0; display:flex; }
+.swipe-btn { width:5rem; border:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+             gap:.25rem; font-family:inherit; font-size:.75rem; font-weight:700; color:#fff; cursor:pointer; }
+.swipe-btn svg { width:1.125rem; height:1.125rem; }
+.swipe-btn.clone { background:var(--soon); }
+.swipe-btn.del { background:var(--late); }
+.swipe-btn:focus-visible { outline:2px solid var(--ink); outline-offset:-4px; }
+
+.swipe-content {
+  position:relative;
+  background:var(--surface);
+  transition:transform .22s cubic-bezier(.32,.72,0,1);
+  /* 세로 스크롤은 브라우저에 넘기고 가로만 우리가 처리한다 */
+  touch-action:pan-y;
+}
+.swipe-content.dragging { transition:none; }
+
+/* 열린 상태에서 본문을 덮어, 눌러도 편집이 열리지 않고 닫히기만 하게 한다 */
+.swipe-shield { position:absolute; inset:0; border:0; background:transparent; cursor:pointer; }
+
 /* 행을 누르면 열리는 시간 조정 패널 — Alarmed의 핵심 동작 */
 .quick { display:grid; grid-template-columns:repeat(4,1fr); gap:.375rem; padding:.625rem .75rem .75rem;
          background:var(--surface-2); border-bottom:1px solid var(--line); }
