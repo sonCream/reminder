@@ -309,12 +309,73 @@ docker run --rm postgres:17-alpine \
 
 ## ⑤ 서버 접속 및 Docker 설치
 
-```bash
-ssh -i key.pem ubuntu@<탄력적 IP>
+Windows 10/11 에는 SSH 클라이언트가 내장돼 있다. PuTTY 같은 별도 프로그램이 필요 없다.
+
+### 5-1. 키 파일 권한 (Windows 필수)
+
+⚠️ 이 단계를 건너뛰면 거의 반드시 실패한다. 다운로드한 `.pem` 은 권한이 너무 열려 있어 SSH 가 거부한다.
+
+```
+WARNING: UNPROTECTED PRIVATE KEY FILE!
 ```
 
-> `Permission denied` 또는 키 권한 경고가 나면 `.pem` 파일 권한 문제다.
-> Windows에서는 파일 속성 → 보안에서 본인 외 사용자를 제거한다.
+PowerShell 에서:
+
+```powershell
+icacls "$env:USERPROFILE\Downloads\key.pem" /inheritance:r
+icacls "$env:USERPROFILE\Downloads\key.pem" /grant:r "$($env:USERNAME):(R)"
+```
+
+상속된 권한을 모두 제거하고, 본인에게만 읽기 권한을 준다.
+
+### 5-2. 접속
+
+```powershell
+ssh -i "$env:USERPROFILE\Downloads\key.pem" ubuntu@<탄력적 IP>
+```
+
+사용자 이름은 AMI 에 따라 다르다. **Ubuntu → `ubuntu`**, Amazon Linux → `ec2-user`.
+처음 접속 시 호스트 확인 질문에는 `yes` 를 입력한다.
+
+### 5-3. 접속이 안 될 때
+
+| 메시지 | 원인 |
+|---|---|
+| `UNPROTECTED PRIVATE KEY FILE` | 5-1 을 실행하지 않았다 |
+| `Permission denied (publickey)` | 사용자 이름이 틀렸다 (`ubuntu` 확인) |
+| `Connection timed out` | 보안 그룹 22번의 `내 IP` 가 옛 IP다 ⚠️ 아래 참고 |
+| `Connection refused` | 인스턴스가 아직 부팅 중이다 |
+
+⚠️ **`Connection timed out` 은 대부분 IP 변경 때문이다.**
+보안 그룹 22번 규칙을 `내 IP` 로 설정했는데, 가정용 인터넷 IP 는 주기적으로 바뀌고
+회사와 집을 오가면 당연히 달라진다.
+**EC2 → 인스턴스 → 보안 → 보안 그룹 → 인바운드 규칙 편집** 에서 22번 소스를
+**`내 IP` 로 다시 선택**하면 현재 IP 로 갱신된다.
+
+### 5-4. MobaXterm 을 쓰는 경우
+
+MobaXterm 은 자체 SSH 구현을 쓰므로 **5-1 의 키 권한 문제가 발생하지 않는다.**
+PuTTY 와 달리 `.ppk` 변환도 필요 없고 `.pem` 을 그대로 쓴다.
+
+1. `Session` → `SSH`
+2. **Remote host**: 탄력적 IP
+3. **Specify username** 체크 후 `ubuntu` 입력 (체크하지 않으면 Windows 계정명으로 시도해 실패한다)
+4. `Advanced SSH settings` 탭 → **Use private key** 체크 → `.pem` 파일 선택
+5. `OK`
+
+접속하면 좌측에 SFTP 탐색기가 열린다.
+`.env` 를 더블클릭하면 GUI 편집기로 수정할 수 있어, 긴 문자열(RDS 엔드포인트, VAPID 키)을
+`nano` 로 붙여넣다 줄이 깨지는 사고를 피할 수 있다.
+
+### 5-5. 최후 수단 — 브라우저 접속
+
+키를 잃었거나 권한 문제가 안 풀릴 때 쓴다.
+
+**EC2 → 인스턴스 선택 → `연결` → `EC2 인스턴스 연결` 탭 → `연결`**
+
+브라우저에서 터미널이 열린다. 키 파일 없이 배포 명령을 모두 실행할 수 있다.
+
+### 5-6. Docker 설치
 
 ```bash
 curl -fsSL https://get.docker.com | sudo sh

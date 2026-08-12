@@ -15,8 +15,23 @@ EC2 서버에 접속한 상태에서 하는 작업이다.
 
 ```bash
 ssh -i key.pem ubuntu@<탄력적 IP>
-git clone <저장소> reminder && cd reminder
+git clone https://github.com/sonCream/reminder.git && cd reminder
 ```
+
+> 저장소가 **비공개**라면 위 명령이 인증을 요구한다. 두 가지 방법이 있다.
+>
+> **(A) 배포 키 — 서버에 권장.** EC2에서 키를 만들고 공개키를 저장소에 등록한다.
+> ```bash
+> ssh-keygen -t ed25519 -C "ec2-deploy" -f ~/.ssh/id_ed25519 -N ""
+> cat ~/.ssh/id_ed25519.pub
+> ```
+> 출력된 값을 GitHub → 저장소 → Settings → Deploy keys → Add deploy key 에 붙여넣고
+> (쓰기 권한은 주지 않는다), 이후 SSH 주소로 clone 한다.
+> ```bash
+> git clone git@github.com:sonCream/reminder.git && cd reminder
+> ```
+>
+> **(B) 개인 액세스 토큰.** 간단하지만 토큰이 `.git/config` 에 남으므로 임시로만 쓴다.
 
 ## 2. `.env` 작성
 

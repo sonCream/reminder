@@ -19,6 +19,19 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
   return bytes
 }
 
+/// VAPID 공개키는 서버에서 실행 시점에 받아온다.
+/// NEXT_PUBLIC_* 로 읽으면 빌드 시점 값이 박혀서, 도커 이미지에는 undefined 가 들어간다.
+async function fetchVapidKey(): Promise<string | null> {
+  try {
+    const response = await fetch('/api/push/vapid-key', { cache: 'no-store' })
+    if (!response.ok) return null
+    const data = (await response.json()) as { key?: string | null }
+    return data.key ? data.key : null
+  } catch {
+    return null
+  }
+}
+
 export function pushSupported(): boolean {
   return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window
 }
@@ -63,8 +76,13 @@ export async function enablePush(): Promise<PushResult> {
     }
   }
 
-  const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-  if (!key) return { ok: false, reason: 'VAPID 공개키가 설정되지 않았습니다. .env를 확인해 주세요.' }
+  const key = await fetchVapidKey()
+  if (!key) {
+    return {
+      ok: false,
+      reason: '서버에 VAPID 공개키가 없습니다. .env 의 VAPID_PUBLIC_KEY 를 확인한 뒤 앱을 재시작해 주세요.',
+    }
+  }
 
   const registration = (await registerServiceWorker()) ?? (await navigator.serviceWorker.ready)
   await navigator.serviceWorker.ready
