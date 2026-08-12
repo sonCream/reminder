@@ -1,0 +1,101 @@
+// 리마인더 앱 스키마
+//
+// 시각은 전부 UTC(timestamptz)로 저장하고, KST 변환은 화면에서만 한다.
+// DB에 로컬 시각을 넣는 순간 반복 일정에서 사고가 난다.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// 사용자가 만든 리마인더 한 건.
+model Reminder {
+  id     Int    @id @default(autoincrement())
+  /// 로그인은 아직 없다. 나중에 인증을 붙일 때를 위해 자리만 잡아둔다.
+  userId String @default("local")
+
+  title String
+  memo  String?
+
+  /// 다음(또는 유일한) 알림 시각.
+  remindAt DateTime @db.Timestamptz(3)
+
+  /// 반복 규칙. null이면 1회성. 예: "daily", "weekly:MON", "monthly:15"
+  repeatRule  String?
+  repeatEndAt DateTime? @db.Timestamptz(3)
+
+  /// 미리 알림(분). null이면 사용 안 함.
+  leadMinutes Int?
+  /// '다시 알림'을 눌렀을 때 미룰 간격(분).
+  snoozeMinutes Int @default(15)
+  /// 알림이 뜨는 순간 자동으로 완료 처리할지.
+  autoComplete Boolean @default(false)
+
+  doneAt DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  notifications Notification[]
+
+  @@index([userId, remindAt])
+  @@index([userId, doneAt])
+}
+
+/// 발송 예약 한 건. 워커는 이 테이블만 보고 일한다.
+///
+/// 스케줄러의 정확성이 이 앱의 핵심이라, 두 가지를 스키마로 강제한다.
+///   1) 중복 발송 차단 — 아래 @@unique
+///   2) 누락 복구 — 워커가 "scheduledAt <= now() 이면서 아직 pending"을 훑으므로
+///      서버가 죽어 있던 동안 지나간 건도 재가동 시 자동으로 잡힌다.
+model Notification {
+  id         Int      @id @default(autoincrement())
+  reminderId Int
+  reminder   Reminder @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+
+  /// 반복 리마인더의 몇 번째 회차인지. 반복 건이 서로 충돌하지 않게 하는 열쇠.
+  occurrenceAt DateTime @db.Timestamptz(3)
+
+  /// "main" | "lead" | "snooze:1" ...
+  kind String
+  /// "push" | "email"
+  channel String
+
+  scheduledAt DateTime @db.Timestamptz(3)
+
+  /// pending | sending | sent | failed | cancelled
+  status   String    @default("pending")
+  attempts Int       @default(0)
+  sentAt   DateTime? @db.Timestamptz(3)
+  error    String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  /// ★ 중복 발송 원천 차단.
+  /// 로직에 버그가 있어도 같은 회차·같은 채널 알림은 두 번 만들어지지 않는다.
+  @@unique([reminderId, occurrenceAt, kind, channel])
+  /// 워커의 "보낼 것 찾기" 쿼리용.
+  @@index([status, scheduledAt])
+}
+
+/// 브라우저 푸시 구독 정보. 기기(브라우저) 하나당 한 건.
+model PushSubscription {
+  id     Int    @id @default(autoincrement())
+  userId String @default("local")
+
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  userAgent String?
+
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([userId])
+}

@@ -1,0 +1,84 @@
+# 개발 환경: db + app + worker 세 컨테이너.
+#
+# 운영에서는 db 서비스를 빼고 DATABASE_URL만 RDS 주소로 바꾼다.
+# 컨테이너끼리는 IP가 아니라 서비스 이름(db)으로 통신한다.
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: reminder-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-reminder}
+      # 컨테이너 시간대를 UTC로 못박는다. 로컬과 RDS의 동작을 같게 만드는 안전장치.
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      # 호스트에서 DB 툴로 직접 붙어볼 때 필요하다.
+      - "5432:5432"
+    volumes:
+      # 이 볼륨이 없으면 컨테이너를 지울 때 데이터가 같이 날아간다.
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-reminder}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reminder-app
+    restart: unless-stopped
+    command: npm run dev
+    env_file:
+      - .env
+    environment:
+      TZ: UTC
+      # 컨테이너 안에서는 호스트가 db다. .env의 값보다 이게 우선한다.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-devpassword}@db:5432/${POSTGRES_DB:-reminder}
+      # ⚠️ Windows 바인드 마운트에서는 파일 변경 이벤트(inotify)가 컨테이너로 전달되지 않는다.
+      #    폴링으로 바꾸지 않으면 코드를 저장해도 화면이 그대로다.
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      # 소스는 바인드 마운트해서 저장 즉시 반영되게 한다.
+      - .:/app
+      # ↓ Windows에서 바인드 마운트가 느린 두 디렉터리만 컨테이너 내부 볼륨으로 분리한다.
+      - node_modules:/app/node_modules
+      - next_cache:/app/.next
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reminder-worker
+    restart: unless-stopped
+    command: npm run worker
+    env_file:
+      - .env
+    environment:
+      TZ: UTC
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-devpassword}@db:5432/${POSTGRES_DB:-reminder}
+      # 워커도 tsx watch 로 돌기 때문에 같은 폴링 설정이 필요하다.
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - next_cache:/app/.next
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  node_modules:
+  next_cache:

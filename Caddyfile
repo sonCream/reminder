@@ -1,0 +1,21 @@
+# Caddy 가 Let's Encrypt 인증서를 자동으로 발급하고 갱신한다.
+# 설정은 이게 전부다. certbot 처럼 갱신 크론을 따로 걸 필요가 없다.
+#
+# ⚠️ 발급 조건: 이 도메인이 공개 DNS에서 조회되고, 80·443 포트가 인터넷에서 열려 있어야 한다.
+#    사내 전용 DNS로만 잡혀 있으면 인증서 발급이 실패한다.
+
+{$APP_DOMAIN} {
+	encode gzip
+
+	# 실제 방문자 IP를 앱까지 전달한다.
+	reverse_proxy app:3000 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}

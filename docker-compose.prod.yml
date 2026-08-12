@@ -1,0 +1,58 @@
+# 운영 구성. 개발용과 다른 점 세 가지.
+#   1) db 서비스가 없다 — RDS 가 대신한다.
+#   2) caddy 가 앞단에서 HTTPS 를 처리한다.
+#   3) 소스를 바인드 마운트하지 않는다 — 이미지에 구워서 올린다.
+#
+# 실행:  docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: reminder-app
+    restart: always
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      TZ: UTC
+    # 포트를 밖으로 열지 않는다. caddy 를 거쳐서만 들어올 수 있다.
+    expose:
+      - "3000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: reminder-worker
+    restart: always
+    command: npx tsx worker/index.ts
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      TZ: UTC
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: reminder-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # .env 의 APP_DOMAIN 값을 Caddyfile 이 그대로 쓴다.
+      APP_DOMAIN: ${APP_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # 발급받은 인증서가 여기 남는다. 이 볼륨을 지우면 재발급을 받게 되고,
+      # Let's Encrypt 는 발급 횟수 제한이 있으므로 함부로 지우지 않는다.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:

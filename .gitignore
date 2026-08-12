@@ -31,7 +31,12 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
+# 실제 값이 든 .env 는 절대 커밋하지 않는다.
 .env*
+# 다만 값이 비어 있는 견본은 저장소에 있어야 한다.
+# 서버에서 `cp .env.production.example .env` 로 시작하기 때문이다.
+!.env.example
+!.env.production.example
 
 # vercel
 .vercel
