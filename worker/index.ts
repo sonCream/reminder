@@ -57,6 +57,7 @@ async function tick(): Promise<void> {
         body: n.reminder.memo ?? '리마인더 시간입니다.',
         url: `/?reminder=${n.reminderId}`,
         badgeCount: await badgeCount(n.reminder.userId),
+        snoozeMinutes: n.reminder.snoozeMinutes,
       })
 
       await prisma.notification.update({

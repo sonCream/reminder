@@ -120,6 +120,43 @@ export async function advanceRepeat(reminderId: number, occurrenceAt: Date): Pro
   return next
 }
 
+/**
+ * 알림에서 '나중에'를 눌렀을 때. 지정한 분 뒤에 다시 알린다.
+ *
+ * 반복 여부에 따라 처리가 갈린다.
+ *
+ * - 1회성: 알림 시각 자체를 옮긴다. 목록에도 새 시각으로 보이는 게 자연스럽다.
+ * - 반복:  remindAt 을 건드리지 않고 일회성 알림만 하나 더 만든다.
+ *          매일 09시 알림을 15분 미뤘다고 내일부터 09시 15분이 되면 안 된다.
+ */
+export async function snoozeReminder(id: number, minutes?: number) {
+  const reminder = await prisma.reminder.findUnique({ where: { id } })
+  if (!reminder) throw new Error('리마인더를 찾을 수 없습니다.')
+
+  const wait = minutes ?? reminder.snoozeMinutes
+  const at = new Date(Date.now() + wait * 60_000)
+
+  if (!reminder.repeatRule) {
+    // 예정 시각이 아직 더 뒤라면 그대로 둔다. 미루기가 앞당기기가 되면 안 된다.
+    if (reminder.remindAt.getTime() > at.getTime()) return reminder
+    return rescheduleReminder(id, at)
+  }
+
+  // occurrenceAt 을 미룬 시각 자체로 두면 여러 번 미뤄도 서로 부딪히지 않는다.
+  await prisma.notification.createMany({
+    data: enabledChannels().map((channel) => ({
+      reminderId: id,
+      occurrenceAt: at,
+      kind: 'snooze',
+      channel,
+      scheduledAt: at,
+    })),
+    skipDuplicates: true,
+  })
+
+  return reminder
+}
+
 export async function completeReminder(id: number, done = true) {
   const target = await prisma.reminder.findUnique({ where: { id } })
   if (!target) throw new Error('리마인더를 찾을 수 없습니다.')

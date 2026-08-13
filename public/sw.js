@@ -38,7 +38,17 @@ self.addEventListener('push', (event) => {
         // 안드로이드는 알림 채널의 중요도를 보고 OS 가 결정하며,
         // 그 값은 사용자가 시스템 설정에서만 바꿀 수 있다.
         requireInteraction: true,
-        data: { url: data.url || '/' },
+        // 앱을 열지 않고 알림에서 바로 처리하는 버튼.
+        // ⚠️ iOS 는 이 버튼을 표시하지 않는다. 그 경우 알림을 누르면 앱이 열리는
+        //    기존 동작으로 자연스럽게 내려앉는다.
+        actions: [
+          { action: 'done', title: '완료' },
+          { action: 'snooze', title: `${data.snoozeMinutes || 15}분 뒤` },
+        ],
+        data: {
+          url: data.url || '/',
+          reminderId: data.reminderId,
+        },
       })
 
       // 앱 아이콘의 숫자 배지. iOS(16.4+)와 데스크톱 크롬/엣지에서만 동작하고,
@@ -52,9 +62,19 @@ self.addEventListener('push', (event) => {
 })
 
 self.addEventListener('notificationclick', (event) => {
-  event.notification.close()
-  const url = (event.notification.data && event.notification.data.url) || '/'
+  const data = event.notification.data || {}
+  const url = data.url || '/'
+  const action = event.action
 
+  event.notification.close()
+
+  // 완료 / 나중에 — 앱을 열지 않고 서버에 바로 알린다.
+  if (action === 'done' || action === 'snooze') {
+    event.waitUntil(handleAction(action, data))
+    return
+  }
+
+  // 알림 본문을 누른 경우 — 앱을 연다.
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
@@ -70,3 +90,36 @@ self.addEventListener('notificationclick', (event) => {
     })(),
   )
 })
+
+async function handleAction(action, data) {
+  if (!data.reminderId) return
+
+  try {
+    const response = await fetch(`/api/reminders/${data.reminderId}/action`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action }),
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+    const body = await response.json()
+
+    if (typeof body.badgeCount === 'number' && self.navigator.setAppBadge) {
+      if (body.badgeCount > 0) await self.navigator.setAppBadge(body.badgeCount)
+      else await self.navigator.clearAppBadge()
+    }
+
+    // 열려 있는 화면이 있으면 목록을 다시 불러오게 알린다.
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    for (const client of windows) client.postMessage({ type: 'reminders-changed' })
+  } catch (error) {
+    // 오프라인이거나 서버가 죽었을 때. 조용히 삼키면 사용자는 처리된 줄 안다.
+    await self.registration.showNotification('처리하지 못했습니다', {
+      body: '네트워크를 확인한 뒤 앱에서 다시 시도해 주세요.',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: `reminder-error-${data.reminderId}`,
+      data: { url: data.url || '/' },
+    })
+  }
+}

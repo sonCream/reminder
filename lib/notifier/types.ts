@@ -9,6 +9,8 @@ export interface NotificationPayload {
   /// 앱 아이콘에 숫자로 표시할 남은 개수. 푸시 채널에서만 의미가 있다.
   /// (알림 자체의 badge 아이콘과 헷갈리지 않도록 이름을 구분했다.)
   badgeCount?: number
+  /// 알림의 '나중에' 버튼이 몇 분 뒤로 미룰지. 버튼 문구에도 쓰인다.
+  snoozeMinutes?: number
 }
 
 /// 발송 수단 하나를 나타낸다.

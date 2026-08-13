@@ -74,6 +74,17 @@ export function ReminderApp() {
     void load(view)
   }, [view, load])
 
+  // 알림의 버튼(완료 / 나중에)으로 처리하면 서비스 워커가 알려준다.
+  // 앱이 열려 있는데 목록이 그대로면 방금 처리한 게 반영되지 않은 것처럼 보인다.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'reminders-changed') void load(view)
+    }
+    navigator.serviceWorker.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage)
+  }, [load, view])
+
   // 앱 아이콘 배지 — 시각이 지났는데 아직 완료하지 않은 개수.
   // 안드로이드 크롬은 이 API가 없으므로 조용히 건너뛴다.
   useEffect(() => {
