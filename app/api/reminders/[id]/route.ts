@@ -48,6 +48,12 @@ export async function PATCH(request: Request, { params }: Ctx) {
       title: typeof body.title === 'string' ? body.title.trim() : undefined,
       memo: body.memo !== undefined ? body.memo : undefined,
       repeatRule: body.repeatRule !== undefined ? body.repeatRule || null : undefined,
+      repeatEndAt:
+        body.repeatEndAt !== undefined
+          ? body.repeatEndAt
+            ? new Date(body.repeatEndAt)
+            : null
+          : undefined,
       leadMinutes: body.leadMinutes !== undefined ? body.leadMinutes : undefined,
       snoozeMinutes: body.snoozeMinutes !== undefined ? body.snoozeMinutes : undefined,
       ...(remindAt ? { remindAt } : {}),

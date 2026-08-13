@@ -10,6 +10,7 @@ import {
   timeLabel,
   type Bucket,
 } from '@/lib/time'
+import { repeatLabel } from '@/lib/repeat'
 import { registerServiceWorker, syncSubscription } from '@/lib/push-client'
 import { SwipeRow } from './SwipeRow'
 import { EditScreen, type EditPayload } from './EditScreen'
@@ -333,7 +334,7 @@ function Row({
             {(reminder.repeatRule || reminder.memo) && (
               <span className="row-sub">
                 {reminder.repeatRule && (
-                  <span className="sub-item"><I.Repeat />{reminder.repeatRule}</span>
+                  <span className="sub-item"><I.Repeat />{repeatLabel(reminder.repeatRule, at)}</span>
                 )}
                 {reminder.memo && (
                   <span className="sub-item"><I.Note />메모</span>

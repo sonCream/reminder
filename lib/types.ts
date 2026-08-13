@@ -7,6 +7,7 @@ export interface ReminderDTO {
   memo: string | null
   remindAt: string
   repeatRule: string | null
+  repeatEndAt: string | null
   leadMinutes: number | null
   snoozeMinutes: number
   autoComplete: boolean
@@ -20,6 +21,7 @@ export function toDTO(r: Reminder): ReminderDTO {
     memo: r.memo,
     remindAt: r.remindAt.toISOString(),
     repeatRule: r.repeatRule,
+    repeatEndAt: r.repeatEndAt ? r.repeatEndAt.toISOString() : null,
     leadMinutes: r.leadMinutes,
     snoozeMinutes: r.snoozeMinutes,
     autoComplete: r.autoComplete,

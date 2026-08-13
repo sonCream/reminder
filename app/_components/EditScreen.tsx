@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react'
 import type { ReminderDTO } from '@/lib/types'
 import { fromLocalInput, relLabel, timeLabel, toLocalInput } from '@/lib/time'
+import { REPEAT_OPTIONS, normalizeRule } from '@/lib/repeat'
 
 export interface EditPayload {
   title: string
   remindAt: string
   memo: string | null
   repeatRule: string | null
+  repeatEndAt: string | null
   leadMinutes: number | null
   snoozeMinutes: number
 }
@@ -29,7 +31,6 @@ const SHIFTS: [string, number][] = [
   ['+1일', 1440],
   ['+1주', 10080],
 ]
-const REPEATS = ['', '매일', '평일만', '매주', '매월', '매년']
 const LEADS: [string, number | null][] = [
   ['없음', null],
   ['5분 전', 5],
@@ -44,6 +45,7 @@ export function EditScreen({ reminder, open, busy, onCancel, onSave, onDelete }:
   const [when, setWhen] = useState('')
   const [memo, setMemo] = useState('')
   const [repeatRule, setRepeatRule] = useState('')
+  const [repeatEndAt, setRepeatEndAt] = useState('')
   const [leadMinutes, setLeadMinutes] = useState<number | null>(null)
   const [snoozeMinutes, setSnoozeMinutes] = useState(15)
 
@@ -53,7 +55,9 @@ export function EditScreen({ reminder, open, busy, onCancel, onSave, onDelete }:
     setTitle(reminder?.title ?? '')
     setWhen(toLocalInput(base))
     setMemo(reminder?.memo ?? '')
-    setRepeatRule(reminder?.repeatRule ?? '')
+    // 예전에 한글로 저장된 값도 코드로 바꿔 받아준다.
+    setRepeatRule(normalizeRule(reminder?.repeatRule) ?? '')
+    setRepeatEndAt(reminder?.repeatEndAt ? reminder.repeatEndAt.slice(0, 10) : '')
     setLeadMinutes(reminder?.leadMinutes ?? null)
     setSnoozeMinutes(reminder?.snoozeMinutes ?? 15)
   }, [reminder])
@@ -87,6 +91,11 @@ export function EditScreen({ reminder, open, busy, onCancel, onSave, onDelete }:
               remindAt: parsed!.toISOString(),
               memo: memo.trim() === '' ? null : memo.trim(),
               repeatRule: repeatRule === '' ? null : repeatRule,
+              // 종료일은 그날 끝까지 포함되도록 23:59 로 둔다.
+              repeatEndAt:
+                repeatRule !== '' && repeatEndAt !== ''
+                  ? new Date(`${repeatEndAt}T23:59`).toISOString()
+                  : null,
               leadMinutes,
               snoozeMinutes,
             })
@@ -145,13 +154,29 @@ export function EditScreen({ reminder, open, busy, onCancel, onSave, onDelete }:
             <div className="fld-row">
               <span className="fld-name">반복</span>
               <select value={repeatRule} onChange={(e) => setRepeatRule(e.target.value)}>
-                {REPEATS.map((r) => (
-                  <option key={r || 'none'} value={r}>{r === '' ? '안 함' : r}</option>
+                {REPEAT_OPTIONS.map((o) => (
+                  <option key={o.value || 'none'} value={o.value}>{o.label}</option>
                 ))}
               </select>
             </div>
+            {repeatRule !== '' && (
+              <div className="fld-row">
+                <span className="fld-name">반복 종료</span>
+                <input
+                  type="date"
+                  className="date-inline"
+                  value={repeatEndAt}
+                  onChange={(e) => setRepeatEndAt(e.target.value)}
+                />
+              </div>
+            )}
           </div>
-          <p className="hint">반복은 다음 회차를 자동으로 잡아주는 기능입니다. 지금은 표시만 되고, 스케줄러 연동은 푸시 작업 이후에 붙입니다.</p>
+          {repeatRule !== '' && (
+            <p className="hint">
+              알림을 보내거나 완료로 표시하면 다음 회차가 자동으로 잡힙니다.
+              {repeatEndAt === '' ? ' 종료일을 비워두면 계속 반복합니다.' : ''}
+            </p>
+          )}
         </div>
 
         <div className="grp">

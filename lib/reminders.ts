@@ -1,5 +1,6 @@
 import { prisma } from './prisma'
 import { enabledChannels } from './notifier'
+import { nextOccurrence } from './repeat'
 
 const DEFAULT_USER = 'local'
 
@@ -8,6 +9,7 @@ export interface ReminderInput {
   remindAt: Date
   memo?: string | null
   repeatRule?: string | null
+  repeatEndAt?: Date | null
   leadMinutes?: number | null
   snoozeMinutes?: number
   autoComplete?: boolean
@@ -52,6 +54,7 @@ export async function createReminder(input: ReminderInput, userId = DEFAULT_USER
       memo: input.memo ?? null,
       remindAt: input.remindAt,
       repeatRule: input.repeatRule ?? null,
+      repeatEndAt: input.repeatEndAt ?? null,
       leadMinutes: input.leadMinutes ?? null,
       snoozeMinutes: input.snoozeMinutes ?? 15,
       autoComplete: input.autoComplete ?? false,
@@ -83,7 +86,60 @@ export async function rescheduleReminder(id: number, remindAt: Date) {
   return reminder
 }
 
+/**
+ * 반복 리마인더를 다음 회차로 옮긴다.
+ *
+ * 채널이 여러 개면(푸시·이메일) 같은 회차에 대해 이 함수가 여러 번 불린다.
+ * `remindAt` 이 아직 방금 발송한 회차일 때만 옮기는 조건부 갱신이라,
+ * 두 번째 호출은 아무 일도 하지 않는다. 회차를 건너뛰는 사고를 막는 장치다.
+ *
+ * 반환값은 새 회차 시각. 옮기지 않았으면 null.
+ */
+export async function advanceRepeat(reminderId: number, occurrenceAt: Date): Promise<Date | null> {
+  const reminder = await prisma.reminder.findUnique({ where: { id: reminderId } })
+  if (!reminder || !reminder.repeatRule || reminder.doneAt) return null
+
+  const next = nextOccurrence(occurrenceAt, reminder.repeatRule, new Date(), reminder.repeatEndAt)
+
+  if (!next) {
+    // 종료일을 넘겼다. 규칙을 지워 더 이상 돌지 않게 한다.
+    await prisma.reminder.updateMany({
+      where: { id: reminderId, remindAt: occurrenceAt },
+      data: { repeatRule: null },
+    })
+    return null
+  }
+
+  const { count } = await prisma.reminder.updateMany({
+    where: { id: reminderId, remindAt: occurrenceAt, doneAt: null },
+    data: { remindAt: next },
+  })
+  if (count !== 1) return null // 다른 채널이 이미 옮겼다
+
+  await scheduleNotifications(reminderId, next, reminder.leadMinutes)
+  return next
+}
+
 export async function completeReminder(id: number, done = true) {
+  const target = await prisma.reminder.findUnique({ where: { id } })
+  if (!target) throw new Error('리마인더를 찾을 수 없습니다.')
+
+  // 반복 리마인더를 완료하면 없애는 게 아니라 다음 회차로 넘긴다.
+  // 매일 먹는 약을 오늘 체크했다고 내일치가 사라지면 안 된다.
+  if (done && target.repeatRule) {
+    const next = nextOccurrence(target.remindAt, target.repeatRule, new Date(), target.repeatEndAt)
+    if (next) {
+      await prisma.notification.updateMany({
+        where: { reminderId: id, status: { in: ['pending', 'sending'] } },
+        data: { status: 'cancelled' },
+      })
+      const moved = await prisma.reminder.update({ where: { id }, data: { remindAt: next } })
+      await scheduleNotifications(id, next, moved.leadMinutes)
+      return moved
+    }
+    // 다음 회차가 없으면(종료일 지남) 아래로 내려가 그대로 완료 처리한다.
+  }
+
   const reminder = await prisma.reminder.update({
     where: { id },
     data: { doneAt: done ? new Date() : null },

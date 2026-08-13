@@ -26,6 +26,7 @@ export async function POST(request: Request) {
     memo: body.memo ?? null,
     remindAt,
     repeatRule: body.repeatRule || null,
+    repeatEndAt: body.repeatEndAt ? new Date(body.repeatEndAt) : null,
     leadMinutes: body.leadMinutes ?? null,
     snoozeMinutes: body.snoozeMinutes ?? 15,
   })

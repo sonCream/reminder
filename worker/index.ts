@@ -2,6 +2,7 @@ import 'dotenv/config'
 import cron from 'node-cron'
 import { prisma } from '../lib/prisma'
 import { getNotifier } from '../lib/notifier'
+import { advanceRepeat } from '../lib/reminders'
 
 /// 한 번에 처리할 최대 건수. 밀린 알림이 많아도 한 틱이 무한정 길어지지 않게 한다.
 const BATCH = 50
@@ -63,6 +64,15 @@ async function tick(): Promise<void> {
         data: { status: 'sent', sentAt: new Date(), error: null },
       })
       console.log(`[worker] 발송 완료 #${n.id} (${n.channel}) ${n.reminder.title}`)
+
+      // 본 알림을 보냈으면 반복 리마인더를 다음 회차로 넘긴다.
+      // 미리 알림(lead)에서 넘기면 정작 본 알림이 사라지므로 kind 를 구분한다.
+      if (n.kind === 'main') {
+        const next = await advanceRepeat(n.reminderId, n.occurrenceAt)
+        if (next) {
+          console.log(`[worker] 다음 회차 예약 #${n.reminderId} → ${next.toISOString()}`)
+        }
+      }
     } catch (err) {
       const attempts = n.attempts + 1
       const giveUp = attempts >= MAX_ATTEMPTS
