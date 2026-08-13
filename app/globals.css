@@ -258,4 +258,15 @@ button:active { opacity:.55; }
           background:var(--late-soft); color:var(--late); }
 .notice.ok { background:var(--accent-soft); color:var(--accent); }
 
+/* ---- 기기별 알림 설정 안내 ---- */
+.help { background:var(--surface); border-radius:.875rem; box-shadow:var(--shadow);
+        padding:.875rem; display:flex; flex-direction:column; gap:1rem; }
+.help section { display:flex; flex-direction:column; gap:.375rem; }
+.help h4 { margin:0; font-size:.8125rem; font-weight:700; color:var(--ink); }
+.help p { margin:0; font-size:.8125rem; line-height:1.6; color:var(--muted); }
+.help .path { font-family:var(--mono); font-size:.75rem; line-height:1.7; color:var(--accent);
+              background:var(--surface-2); border-radius:.5rem; padding:.5rem .625rem; word-break:break-word; }
+.help .path b { color:var(--accent); font-weight:800; text-decoration:underline; text-underline-offset:2px; }
+.help .tip { font-size:.75rem; color:var(--faint); line-height:1.55; }
+
 @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
