@@ -22,6 +22,11 @@ self.addEventListener('push', (event) => {
     data = { title: '리마인더', body: event.data ? event.data.text() : '' }
   }
 
+  // 처리할 대상이 있을 때만 버튼을 단다.
+  // 테스트 알림은 reminderId 가 없으므로 버튼 없이 뜬다 — 눌러도 아무 일이
+  // 일어나지 않는 버튼을 보여주는 것보다 낫다.
+  const actionable = typeof data.reminderId === 'number' && data.reminderId > 0
+
   event.waitUntil(
     (async () => {
       await self.registration.showNotification(data.title || '리마인더', {
@@ -41,10 +46,12 @@ self.addEventListener('push', (event) => {
         // 앱을 열지 않고 알림에서 바로 처리하는 버튼.
         // ⚠️ iOS 는 이 버튼을 표시하지 않는다. 그 경우 알림을 누르면 앱이 열리는
         //    기존 동작으로 자연스럽게 내려앉는다.
-        actions: [
-          { action: 'done', title: '완료' },
-          { action: 'snooze', title: `${data.snoozeMinutes || 15}분 뒤` },
-        ],
+        actions: actionable
+          ? [
+              { action: 'done', title: '완료' },
+              { action: 'snooze', title: `${data.snoozeMinutes || 15}분 뒤` },
+            ]
+          : [],
         data: {
           url: data.url || '/',
           reminderId: data.reminderId,
@@ -92,7 +99,7 @@ self.addEventListener('notificationclick', (event) => {
 })
 
 async function handleAction(action, data) {
-  if (!data.reminderId) return
+  if (typeof data.reminderId !== 'number' || data.reminderId <= 0) return
 
   try {
     const response = await fetch(`/api/reminders/${data.reminderId}/action`, {
