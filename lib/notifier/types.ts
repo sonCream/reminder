@@ -11,6 +11,8 @@ export interface NotificationPayload {
   badgeCount?: number
   /// 알림의 '나중에' 버튼이 몇 분 뒤로 미룰지. 버튼 문구에도 쓰인다.
   snoozeMinutes?: number
+  /// 알림 묶음 키. 회차마다 달라야 한다 — 자세한 이유는 sw.js 의 tag 주석 참고.
+  tagKey?: string
 }
 
 /// 발송 수단 하나를 나타낸다.

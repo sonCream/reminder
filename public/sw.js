@@ -33,8 +33,15 @@ self.addEventListener('push', (event) => {
         body: data.body || '리마인더 시간입니다.',
         icon: '/icons/icon-192.png',
         badge: '/icons/icon-192.png',
-        // 같은 리마인더의 알림이 여러 개 쌓이지 않게 한다.
-        tag: `reminder-${data.reminderId ?? 'x'}`,
+        // 회차마다 다른 값이어야 한다.
+        //
+        // 리마인더 id 로 묶으면 매일 오는 알림이 전부 같은 tag 가 되어,
+        // 안드로이드가 이를 "기존 알림 교체"로 처리하면서 팝업(heads-up)을 생략한다.
+        // 목록에는 들어오는데 화면 위로 뜨지 않는 원인이었다.
+        //
+        // 서버가 발송 건 id 를 tagKey 로 내려준다. 회차마다 다르고,
+        // 같은 건을 재시도할 때는 같아서 중복은 여전히 걸러진다.
+        tag: `reminder-${data.tagKey || data.reminderId || 'x'}`,
         renotify: true,
         // 사용자가 확인하기 전에 저절로 사라지지 않게 한다.
         // 리마인더는 놓치면 의미가 없다.

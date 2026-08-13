@@ -40,6 +40,7 @@ export class PushNotifier implements Notifier {
       url: payload.url ?? '/',
       badgeCount: payload.badgeCount,
       snoozeMinutes: payload.snoozeMinutes,
+      tagKey: payload.tagKey,
       reminderId: payload.reminderId,
     })
 

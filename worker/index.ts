@@ -58,6 +58,8 @@ async function tick(): Promise<void> {
         url: `/?reminder=${n.reminderId}`,
         badgeCount: await badgeCount(n.reminder.userId),
         snoozeMinutes: n.reminder.snoozeMinutes,
+        // 발송 건 id 를 그대로 쓴다. 회차마다 다르고, 같은 건을 재시도할 때는 같다.
+        tagKey: String(n.id),
       })
 
       await prisma.notification.update({
