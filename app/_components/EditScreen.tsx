@@ -153,7 +153,15 @@ export function EditScreen({ reminder, open, busy, onCancel, onSave, onDelete }:
           <div className="fld">
             <div className="fld-row">
               <span className="fld-name">반복</span>
-              <select value={repeatRule} onChange={(e) => setRepeatRule(e.target.value)}>
+              <select
+                value={repeatRule}
+                onChange={(e) => {
+                  setRepeatRule(e.target.value)
+                  // 반복을 끄면 종료일도 함께 비운다. 남겨두면 다시 켰을 때
+                  // 예전 종료일이 되살아나 의도치 않게 반복이 곧 끝나버린다.
+                  if (e.target.value === '') setRepeatEndAt('')
+                }}
+              >
                 {REPEAT_OPTIONS.map((o) => (
                   <option key={o.value || 'none'} value={o.value}>{o.label}</option>
                 ))}
@@ -168,6 +176,18 @@ export function EditScreen({ reminder, open, busy, onCancel, onSave, onDelete }:
                   value={repeatEndAt}
                   onChange={(e) => setRepeatEndAt(e.target.value)}
                 />
+                {/* 날짜 입력은 모바일에서 값을 지울 방법이 없다. iOS 피커에는 '지우기'가 없어
+                    한 번 정하면 뺄 수 없으므로 버튼을 따로 둔다. */}
+                {repeatEndAt !== '' && (
+                  <button
+                    type="button"
+                    className="clear-btn"
+                    aria-label="반복 종료일 지우기"
+                    onClick={() => setRepeatEndAt('')}
+                  >
+                    지우기
+                  </button>
+                )}
               </div>
             )}
           </div>
