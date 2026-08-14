@@ -95,7 +95,7 @@ function Badge({ state, label }: { state: State; label: string }) {
  * 푸시가 안 올 때 원인은 대개 권한·구독·홈 화면 추가 셋 중 하나라 그걸 한눈에 보여주고,
  * 실패하면 "무엇을 하면 되는지"까지 문장으로 알려준다.
  */
-export function SettingsScreen() {
+export function SettingsScreen({ onShowOnboarding }: { onShowOnboarding?: () => void }) {
   const [permission, setPermission] = useState<string | null>(null)
   const [subscribed, setSubscribed] = useState<boolean | null>(null)
   const [badgeSupported, setBadgeSupported] = useState<boolean | null>(null)
@@ -397,7 +397,8 @@ export function SettingsScreen() {
             className="action-btn ghost"
             onClick={() => {
               patchOnboarding({ hidden: false })
-              setMessage({ ok: true, text: '목록 화면 위에서 다시 볼 수 있습니다.' })
+              // 안내는 목록 위에 있다. 설정에 남겨두면 눌러도 아무 일이 없어 보인다.
+              onShowOnboarding?.()
             }}
           >
             시작하기 안내 다시 보기

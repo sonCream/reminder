@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { detectPlatform, isStandalone, type Platform } from '@/lib/platform'
 import { canInstall, promptInstall, subscribeInstall } from '@/lib/install-prompt'
-import { patchOnboarding, readOnboarding } from '@/lib/onboarding'
+import { patchOnboarding, readOnboarding, subscribeOnboarding } from '@/lib/onboarding'
 import { readKey } from '@/lib/auth-client'
 import { currentSubscription, enablePush } from '@/lib/push-client'
 import { KeyBox } from './KeyBox'
@@ -55,7 +55,23 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
 
   useEffect(() => {
     void refresh()
-    return subscribeInstall(() => setInstallable(canInstall()))
+
+    const unsubscribeInstall = subscribeInstall(() => setInstallable(canInstall()))
+    // 설정 화면에서 '다시 보기' 를 눌렀을 때 즉시 반응한다.
+    const unsubscribeFlags = subscribeOnboarding(setFlags)
+
+    // 홈 화면에 추가하거나 시스템 설정을 만지고 돌아오면 상태가 바뀌어 있다.
+    // 돌아왔을 때 다시 확인해야 끝난 항목이 체크로 바뀐다.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refresh()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      unsubscribeInstall()
+      unsubscribeFlags()
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [refresh])
 
   if (platform === null || flags.hidden) return null

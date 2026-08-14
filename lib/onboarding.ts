@@ -31,6 +31,17 @@ export function readOnboarding(): OnboardingState {
   }
 }
 
+/// 설정 화면에서 상태를 바꿔도 목록 위의 안내가 즉시 반응해야 한다.
+/// 저장만 하면 이미 떠 있는 화면은 예전 값을 그대로 들고 있다.
+const listeners = new Set<(state: OnboardingState) => void>()
+
+export function subscribeOnboarding(fn: (state: OnboardingState) => void): () => void {
+  listeners.add(fn)
+  return () => {
+    listeners.delete(fn)
+  }
+}
+
 export function patchOnboarding(patch: Partial<OnboardingState>): OnboardingState {
   const next = { ...readOnboarding(), ...patch }
   try {
@@ -38,5 +49,6 @@ export function patchOnboarding(patch: Partial<OnboardingState>): OnboardingStat
   } catch {
     /* 저장하지 못해도 이번 화면에서는 반영된다 */
   }
+  listeners.forEach((fn) => fn(next))
   return next
 }

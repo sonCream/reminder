@@ -269,7 +269,7 @@ export function ReminderApp() {
         </section>
 
         {/* ---------- 설정 ---------- */}
-        {tab === 'settings' && <SettingsScreen />}
+        {tab === 'settings' && <SettingsScreen onShowOnboarding={() => setTab('list')} />}
 
         {/* ---------- 편집(오른쪽에서 밀고 들어옴) ---------- */}
         {editing !== null && (
