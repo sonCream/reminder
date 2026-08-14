@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { currentSubscription, disablePush, enablePush } from '@/lib/push-client'
 import { clearKey, importKey, rotateKey } from '@/lib/auth-client'
 import { detectPlatform, isStandalone, type Platform } from '@/lib/platform'
-import { patchOnboarding } from '@/lib/onboarding'
+import { patchOnboarding, resetOnboarding } from '@/lib/onboarding'
 import { KeyBox } from './KeyBox'
 
 type State = 'ok' | 'warn' | 'off'
@@ -417,6 +417,19 @@ export function SettingsScreen({ onShowOnboarding }: { onShowOnboarding?: () => 
           <button className="action-btn ghost" onClick={() => setHelpOpen((v) => !v)} aria-expanded={helpOpen}>
             {helpOpen ? '닫기' : '알림이 안 뜰 때 확인할 것'}
           </button>
+          <button
+            className="action-btn ghost"
+            onClick={() => {
+              resetOnboarding()
+              onShowOnboarding?.()
+            }}
+          >
+            안내 처음부터 다시
+          </button>
+          <p className="hint">
+            안드로이드는 홈 화면에서 앱을 지워도 사이트 데이터가 남아, 다시 설치해도
+            예전 진행 상태를 그대로 물려받습니다. 처음처럼 되돌리려면 이걸 누르세요.
+          </p>
           {helpOpen && platform && <PlatformHelp platform={platform} />}
         </div>
 

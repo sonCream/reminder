@@ -5,7 +5,7 @@ import { detectPlatform, isStandalone, type Platform } from '@/lib/platform'
 import { canInstall, promptInstall, subscribeInstall } from '@/lib/install-prompt'
 import { patchOnboarding, readOnboarding, subscribeOnboarding } from '@/lib/onboarding'
 import { readKey } from '@/lib/auth-client'
-import { currentSubscription, enablePush } from '@/lib/push-client'
+import { currentSubscription, disablePush, enablePush } from '@/lib/push-client'
 import { KeyBox } from './KeyBox'
 
 /// iOS 공유 버튼 모양. 말로 "공유 버튼" 이라고 하면 못 찾는 사람이 많다.
@@ -25,6 +25,8 @@ interface Step {
   desc: string
   done: boolean
   action?: React.ReactNode
+  /// 끝난 항목을 다시 하고 싶을 때. 시스템 설정을 바꾸고 확인하러 돌아올 때 쓴다.
+  onRedo?: () => void
 }
 
 /**
@@ -156,6 +158,14 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
     title: '알림 켜기',
     desc: '정해둔 시각에 알림을 보내려면 필요합니다.',
     done: subscribed,
+    // 구독이 남아 있어 완료로 보이지만 실제로는 안 오는 경우가 있다.
+    // 껐다 켜면 구독이 새로 만들어져 서버에도 다시 등록된다.
+    onRedo: async () => {
+      setBusy(true)
+      await disablePush().catch(() => {})
+      await refresh()
+      setBusy(false)
+    },
     action: (
       <>
         <button className="action-btn" onClick={turnOnNotifications} disabled={busy}>
@@ -176,6 +186,7 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
       title: '팝업으로 받기',
       desc: '안드로이드는 웹 알림을 기본적으로 소리만 나게 합니다. 화면 위에 뜨게 하려면 한 번 설정해야 합니다.',
       done: flags.popupAck,
+      onRedo: () => mark({ popupAck: false }),
       action: (
         <>
           <div className="ios-guide">
@@ -227,6 +238,7 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
     title: '계정 키 보관',
     desc: '이 앱은 가입이 없습니다. 키가 계정을 대신하고, 잃으면 되찾을 수 없습니다.',
     done: flags.keyBackedUp,
+    onRedo: () => mark({ keyBackedUp: false }),
     action: showKey ? (
       <>
         <KeyBox value={readKey() ?? ''} />
@@ -272,7 +284,14 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
               {step.done ? '✓' : index + 1}
             </span>
             <div className="body">
-              <span className="title">{step.title}</span>
+              <span className="title">
+                {step.title}
+                {step.done && step.onRedo && (
+                  <button className="redo" onClick={step.onRedo}>
+                    다시 하기
+                  </button>
+                )}
+              </span>
               <span className="desc">{step.desc}</span>
               {!step.done && step.action}
             </div>

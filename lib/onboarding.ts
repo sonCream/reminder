@@ -42,6 +42,14 @@ export function subscribeOnboarding(fn: (state: OnboardingState) => void): () =>
   }
 }
 
+/// 안내를 처음 상태로 되돌린다.
+///
+/// 안드로이드는 홈 화면에서 앱을 지워도 사이트 데이터가 남아 예전 진행 상태를
+/// 그대로 물려받는다. 다시 설치했는데 이미 다 끝난 것처럼 보이는 이유다.
+export function resetOnboarding(): OnboardingState {
+  return patchOnboarding({ popupAck: false, keyBackedUp: false, hidden: false })
+}
+
 export function patchOnboarding(patch: Partial<OnboardingState>): OnboardingState {
   const next = { ...readOnboarding(), ...patch }
   try {
