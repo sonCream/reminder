@@ -6,8 +6,6 @@ import { KeyBox } from './KeyBox'
 
 type Phase =
   | { name: 'checking' }
-  /// 처음 실행이라 계정을 새로 만들었다. 키를 한 번 보여주고 넘어간다.
-  | { name: 'created'; key: string }
   /// 저장된 키를 서버가 모른다. 자동으로 새로 만들지 않는다 —
   /// 그러면 데이터가 사라진 걸 모른 채 빈 앱을 쓰게 된다.
   | { name: 'unknown-key' }
@@ -32,7 +30,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const result = await bootstrapSession()
     switch (result.status) {
       case 'ok': return setPhase({ name: 'ready' })
-      case 'created': return setPhase({ name: 'created', key: result.key })
+      // 처음 실행이어도 키 화면으로 막지 않는다. 아무것도 안 만들어 본 사람에게
+      // "이 값을 보관하세요" 를 먼저 요구하면 거기서 이탈한다.
+      // 백업은 목록 위 '시작하기' 체크리스트가 이어서 안내한다.
+      case 'created': return setPhase({ name: 'ready' })
       case 'unknown-key': return setPhase({ name: 'unknown-key' })
       case 'storage-blocked': return setPhase({ name: 'blocked' })
       default: return setPhase({ name: 'error', reason: result.reason })
@@ -81,42 +82,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
           </button>
           <button className="gate-link" onClick={() => setImporting(false)}>
             돌아가기
-          </button>
-        </div>
-      </main>
-    )
-  }
-
-  /* ---------- 처음 실행 ---------- */
-  if (phase.name === 'created') {
-    return (
-      <main className="gate">
-        <div className="gate-card">
-          <h1>시작하기 전에</h1>
-          <p className="gate-sub">
-            이 앱은 가입도 로그인도 없습니다. 대신 아래 키가 계정을 대신합니다.
-            <br />
-            <b>지금 복사해서 안전한 곳에 보관해 주세요.</b>
-          </p>
-
-          <KeyBox value={phase.key} />
-
-          <p className="gate-sub">
-            나중에 <b>설정 → 계정</b>에서 다시 꺼낼 수 있습니다.
-          </p>
-
-          <button className="action-btn" onClick={() => setPhase({ name: 'ready' })}>
-            보관했습니다. 시작하기
-          </button>
-          <button
-            className="gate-link"
-            onClick={() => {
-              // 새로 만든 계정은 버리고 기존 키로 붙는다.
-              clearKey()
-              setImporting(true)
-            }}
-          >
-            다른 기기에서 쓰던 키가 있어요
           </button>
         </div>
       </main>

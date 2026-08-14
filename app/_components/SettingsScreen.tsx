@@ -2,21 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { currentSubscription, disablePush, enablePush } from '@/lib/push-client'
-import { clearKey, rotateKey } from '@/lib/auth-client'
+import { clearKey, importKey, rotateKey } from '@/lib/auth-client'
+import { detectPlatform, isStandalone, type Platform } from '@/lib/platform'
+import { patchOnboarding } from '@/lib/onboarding'
 import { KeyBox } from './KeyBox'
 
 type State = 'ok' | 'warn' | 'off'
-type Platform = 'android' | 'ios' | 'desktop'
-
-function detectPlatform(): Platform {
-  const ua = navigator.userAgent
-  if (/android/i.test(ua)) return 'android'
-  // 아이패드는 최근 iPadOS 에서 데스크톱 UA 를 쓴다. 터치 지원 여부로 걸러낸다.
-  if (/iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
-    return 'ios'
-  }
-  return 'desktop'
-}
 
 /**
  * 기기별 알림 설정 안내.
@@ -117,11 +108,13 @@ export function SettingsScreen() {
   /// 키는 서버에 해시만 있어서 다시 가져올 수 없다.
   /// 이 기기에 저장된 값을 그대로 보여주거나, 새로 발급받았을 때만 채워진다.
   const [shownKey, setShownKey] = useState<string | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importInput, setImportInput] = useState('')
 
   const refresh = useCallback(async () => {
     setPermission(typeof Notification === 'undefined' ? '미지원' : Notification.permission)
     setBadgeSupported('setAppBadge' in navigator)
-    setStandalone(window.matchMedia('(display-mode: standalone)').matches)
+    setStandalone(isStandalone())
     setPlatform(detectPlatform())
     setSubscribed((await currentSubscription()) !== null)
 
@@ -150,6 +143,20 @@ export function SettingsScreen() {
     }
     await refresh()
     setBusy(false)
+  }
+
+  async function submitImport() {
+    setBusy(true)
+    setMessage(null)
+    const result = await importKey(importInput)
+    setBusy(false)
+
+    if (!result.ok) {
+      setMessage({ ok: false, text: result.reason ?? '키를 확인해 주세요.' })
+      return
+    }
+    // 다른 계정으로 옮겨왔으니 화면을 새로 그린다.
+    window.location.reload()
   }
 
   async function makeNewKey() {
@@ -279,6 +286,28 @@ export function SettingsScreen() {
             </button>
           )}
 
+          {importOpen ? (
+            <div className="fld" style={{ padding: '.875rem', display: 'flex', flexDirection: 'column', gap: '.625rem' }}>
+              <textarea
+                rows={3}
+                className="key-input"
+                value={importInput}
+                placeholder="다른 기기에서 꺼낸 키"
+                onChange={(e) => setImportInput(e.target.value)}
+              />
+              <button className="action-btn" onClick={submitImport} disabled={busy || importInput.trim() === ''}>
+                이 키로 바꾸기
+              </button>
+              <button className="gate-link" onClick={() => setImportOpen(false)}>
+                취소
+              </button>
+            </div>
+          ) : (
+            <button className="action-btn ghost" onClick={() => setImportOpen(true)} disabled={busy}>
+              다른 기기의 키 가져오기
+            </button>
+          )}
+
           <button className="action-btn ghost" onClick={makeNewKey} disabled={busy}>
             키 새로 만들기
           </button>
@@ -363,9 +392,18 @@ export function SettingsScreen() {
         </div>
 
         <div className="grp">
-          <p className="lbl">알림이 안 뜬다면</p>
+          <p className="lbl">안내</p>
+          <button
+            className="action-btn ghost"
+            onClick={() => {
+              patchOnboarding({ hidden: false })
+              setMessage({ ok: true, text: '목록 화면 위에서 다시 볼 수 있습니다.' })
+            }}
+          >
+            시작하기 안내 다시 보기
+          </button>
           <button className="action-btn ghost" onClick={() => setHelpOpen((v) => !v)} aria-expanded={helpOpen}>
-            {helpOpen ? '닫기' : '이 기기에서 확인할 것 보기'}
+            {helpOpen ? '닫기' : '알림이 안 뜰 때 확인할 것'}
           </button>
           {helpOpen && platform && <PlatformHelp platform={platform} />}
         </div>

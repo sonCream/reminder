@@ -12,6 +12,7 @@ import {
 } from '@/lib/time'
 import { repeatLabel } from '@/lib/repeat'
 import { registerServiceWorker, syncSubscription } from '@/lib/push-client'
+import { Onboarding } from './Onboarding'
 import { SwipeRow } from './SwipeRow'
 import { EditScreen, type EditPayload } from './EditScreen'
 import { SettingsScreen } from './SettingsScreen'
@@ -200,6 +201,9 @@ export function ReminderApp() {
           </div>
 
           <div className="scroll">
+            {/* 설치·알림 설정이 끝나면 스스로 사라진다 */}
+            {view === 'active' && <Onboarding />}
+
             {!ready ? (
               <p className="empty">불러오는 중…</p>
             ) : view === 'done' ? (
