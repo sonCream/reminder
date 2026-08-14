@@ -12,6 +12,7 @@
     "vapid": "node scripts/generate-vapid.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "check:repeat": "tsx scripts/check-repeat.ts",
+    "check:auth": "tsx scripts/check-auth.ts",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",

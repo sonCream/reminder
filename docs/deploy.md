@@ -50,7 +50,12 @@ nano .env
 | `NOTIFIER_CHANNELS` | `push` |
 | `SMTP_USER` / `SMTP_PASS` | Gmail 주소와 **앱 비밀번호** ⚠️ 로그인에 필수 |
 | `AUTH_OWNER_EMAIL` | 기존 데이터를 넘겨받을 주소 ⚠️ 아래 참고 |
-| `AUTH_ALLOWED_EMAILS` | 로그인 허용 주소(쉼표 구분). 비우면 누구나 가입 |
+| `AUTH_ALLOWED_DOMAINS` | 로그인 허용 도메인 (예: `creamhouse.net`) |
+| `AUTH_ALLOWED_EMAILS` | 도메인 밖에서 추가로 허용할 주소(쉼표 구분) |
+
+⚠️ **`AUTH_ALLOWED_DOMAINS` 와 `AUTH_ALLOWED_EMAILS` 를 둘 다 비워 두면
+인터넷의 누구나 계정을 만들 수 있다.** 최소 하나는 설정한다.
+여러 명이 쓰는 경우 회사 도메인으로 열어두면 사람이 늘어도 설정을 고칠 필요가 없다.
 
 ⚠️ **SMTP 를 설정하지 않으면 로그인 자체가 불가능하다.**
 매직 링크는 메일로만 전달된다. 운영에서는 메일을 못 보낼 때 링크를 응답에 싣지 않고

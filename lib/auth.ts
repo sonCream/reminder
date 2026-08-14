@@ -26,14 +26,34 @@ export function normalizeEmail(raw: string): string {
   return raw.trim().toLowerCase()
 }
 
-/// AUTH_ALLOWED_EMAILS 를 설정해 두면 그 주소만 로그인할 수 있다.
-/// 비워 두면 누구나 자기 계정을 만들 수 있다.
-export function emailAllowed(email: string): boolean {
-  const list = (process.env.AUTH_ALLOWED_EMAILS ?? '')
+function splitList(raw: string | undefined): string[] {
+  return (raw ?? '')
     .split(',')
-    .map((s) => normalizeEmail(s))
+    .map((s) => normalizeEmail(s).replace(/^@/, ''))
     .filter(Boolean)
-  return list.length === 0 || list.includes(normalizeEmail(email))
+}
+
+/**
+ * 로그인을 허용할지 판단한다.
+ *
+ * 두 가지를 함께 본다. 둘 중 하나라도 걸리면 통과다.
+ *   AUTH_ALLOWED_DOMAINS — 회사 도메인 단위로 열어둘 때. 사람이 늘어도 설정을 안 고쳐도 된다.
+ *   AUTH_ALLOWED_EMAILS  — 특정 주소만 콕 집어 허용할 때.
+ *
+ * ⚠️ 둘 다 비워 두면 누구나 계정을 만들 수 있다.
+ *    인터넷에 열려 있는 주소이므로 운영에서는 최소 하나는 설정한다.
+ */
+export function emailAllowed(email: string): boolean {
+  const normalized = normalizeEmail(email)
+  const domains = splitList(process.env.AUTH_ALLOWED_DOMAINS)
+  const emails = splitList(process.env.AUTH_ALLOWED_EMAILS)
+
+  if (domains.length === 0 && emails.length === 0) return true
+
+  if (emails.includes(normalized)) return true
+
+  const domain = normalized.split('@')[1] ?? ''
+  return domains.includes(domain)
 }
 
 /* ---------------------------------------------------------------- */
