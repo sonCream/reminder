@@ -111,6 +111,7 @@ export function SettingsScreen() {
   const [busy, setBusy] = useState(false)
   const [platform, setPlatform] = useState<Platform | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [email, setEmail] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     setPermission(typeof Notification === 'undefined' ? '미지원' : Notification.permission)
@@ -118,7 +119,24 @@ export function SettingsScreen() {
     setStandalone(window.matchMedia('(display-mode: standalone)').matches)
     setPlatform(detectPlatform())
     setSubscribed((await currentSubscription()) !== null)
+
+    try {
+      const response = await fetch('/api/auth/me', { cache: 'no-store' })
+      const data = await response.json()
+      setEmail(data.user?.email ?? null)
+    } catch {
+      setEmail(null)
+    }
   }, [])
+
+  async function logout() {
+    setBusy(true)
+    // 이 기기의 푸시 구독도 함께 정리한다.
+    // 그러지 않으면 로그아웃해도 알림이 계속 온다.
+    await disablePush().catch(() => {})
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+    window.location.href = '/login'
+  }
 
   useEffect(() => {
     void refresh()
@@ -170,6 +188,21 @@ export function SettingsScreen() {
       </div>
 
       <div className="scroll">
+        <div className="grp">
+          <p className="lbl">계정</p>
+          <div className="fld">
+            <div className="setting">
+              <div className="setting-body">
+                <span className="setting-name">로그인</span>
+                <span className="setting-sub">{email ?? '확인 중…'}</span>
+              </div>
+            </div>
+          </div>
+          <button className="action-btn ghost" onClick={logout} disabled={busy}>
+            로그아웃
+          </button>
+        </div>
+
         <div className="grp">
           <p className="lbl">알림 상태</p>
           <div className="fld">

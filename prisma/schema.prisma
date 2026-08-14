@@ -12,11 +12,60 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// 로그인한 사람.
+///
+/// 비밀번호를 두지 않는다. 메일로 받은 링크를 눌러 본인임을 증명한다(매직 링크).
+/// 비밀번호를 저장하지 않으니 유출될 것도 없고, 재설정 화면도 필요 없다.
+model User {
+  id    String @id @default(cuid())
+  email String @unique
+
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  lastLoginAt DateTime? @db.Timestamptz(3)
+
+  reminders     Reminder[]
+  sessions      Session[]
+  subscriptions PushSubscription[]
+}
+
+/// 로그인 상태. 쿠키에는 이 행의 id 만 담긴다.
+///
+/// 서버에 세션을 두면 로그아웃이나 기기별 해제를 바로 반영할 수 있다.
+/// 토큰만으로 판단하면 만료 전까지 되돌릴 방법이 없다.
+model Session {
+  id     String @id
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  userAgent String?
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// 메일로 보낸 1회용 로그인 링크.
+model LoginToken {
+  id    String @id @default(cuid())
+  email String
+
+  /// ⚠️ 원본이 아니라 해시를 저장한다.
+  /// DB 를 들여다볼 수 있는 사람이 남의 계정에 로그인하지 못하게 한다.
+  tokenHash String    @unique
+  expiresAt DateTime  @db.Timestamptz(3)
+  usedAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([email])
+  @@index([expiresAt])
+}
+
 /// 사용자가 만든 리마인더 한 건.
 model Reminder {
   id     Int    @id @default(autoincrement())
-  /// 로그인은 아직 없다. 나중에 인증을 붙일 때를 위해 자리만 잡아둔다.
   userId String @default("local")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   title String
   memo  String?
@@ -87,6 +136,7 @@ model Notification {
 model PushSubscription {
   id     Int    @id @default(autoincrement())
   userId String @default("local")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   endpoint String @unique
   p256dh   String

@@ -47,8 +47,23 @@ nano .env
 | `APP_DOMAIN` | `reminder.creamhouse.net` |
 | `DATABASE_URL` | RDS 엔드포인트 (`?sslmode=require` 포함) |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | **운영용으로 새로 발급** |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | 위 공개키와 같은 값 |
 | `NOTIFIER_CHANNELS` | `push` |
+| `SMTP_USER` / `SMTP_PASS` | Gmail 주소와 **앱 비밀번호** ⚠️ 로그인에 필수 |
+| `AUTH_OWNER_EMAIL` | 기존 데이터를 넘겨받을 주소 ⚠️ 아래 참고 |
+| `AUTH_ALLOWED_EMAILS` | 로그인 허용 주소(쉼표 구분). 비우면 누구나 가입 |
+
+⚠️ **SMTP 를 설정하지 않으면 로그인 자체가 불가능하다.**
+매직 링크는 메일로만 전달된다. 운영에서는 메일을 못 보낼 때 링크를 응답에 싣지 않고
+503 을 돌려주므로(그렇게 하지 않으면 누구나 남의 주소로 로그인할 수 있다),
+SMTP 없이 배포하면 본인도 못 들어간다.
+
+Gmail 은 2단계 인증을 켠 뒤 **앱 비밀번호**를 발급받아 `SMTP_PASS` 에 넣는다.
+계정 비밀번호로는 로그인되지 않는다.
+
+⚠️ **`AUTH_OWNER_EMAIL` 을 반드시 지정한다.**
+인증을 붙이기 전에 쌓인 리마인더는 `local` 계정에 묶여 있고,
+이 주소로 처음 로그인하는 사람이 그 데이터를 넘겨받는다.
+비워 두면 **먼저 로그인한 아무나** 가져간다.
 
 ⚠️ **VAPID 키는 개발용을 재사용하지 않는다.** 로컬에서 `npm run vapid`로 새로 만들어 옮긴다.
 그리고 **한 번 정한 뒤에는 절대 바꾸지 않는다.** 바꾸는 순간 모든 기기의 알림 구독이 무효가 되어, 사용자가 전부 다시 허용해야 한다.
@@ -63,6 +78,9 @@ docker compose -f docker-compose.prod.yml run --rm app npx prisma migrate deploy
 
 ⚠️ **`migrate dev`가 아니라 `migrate deploy`다.**
 `dev`는 스키마가 어긋났다고 판단하면 데이터를 지우고 다시 만들 수 있다. 운영에서 쓰면 안 된다.
+
+> 로그인 기능을 처음 올릴 때는 이 단계에서 `User` · `Session` · `LoginToken` 테이블이 만들어지고,
+> 기존 데이터를 받아줄 `local` 자리 표시 계정이 함께 생성된다.
 
 ## 4. 기동
 

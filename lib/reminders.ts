@@ -2,7 +2,23 @@ import { prisma } from './prisma'
 import { enabledChannels } from './notifier'
 import { nextOccurrence } from './repeat'
 
-const DEFAULT_USER = 'local'
+/// 내 것이 아닌 리마인더는 없는 것처럼 다룬다.
+///
+/// id 만 알면 남의 데이터를 고칠 수 있으면 안 되므로, 아래 함수들은 전부
+/// 이 검사를 먼저 통과해야 한다. "권한 없음" 대신 "없음"으로 답하는 이유는
+/// 그 id 가 존재한다는 사실조차 알려줄 필요가 없기 때문이다.
+export class NotFoundError extends Error {
+  constructor() {
+    super('리마인더를 찾을 수 없습니다.')
+    this.name = 'NotFoundError'
+  }
+}
+
+async function requireOwned(id: number, userId: string) {
+  const reminder = await prisma.reminder.findFirst({ where: { id, userId } })
+  if (!reminder) throw new NotFoundError()
+  return reminder
+}
 
 export interface ReminderInput {
   title: string
@@ -46,7 +62,7 @@ export async function scheduleNotifications(
   await prisma.notification.createMany({ data: rows, skipDuplicates: true })
 }
 
-export async function createReminder(input: ReminderInput, userId = DEFAULT_USER) {
+export async function createReminder(input: ReminderInput, userId: string) {
   const reminder = await prisma.reminder.create({
     data: {
       userId,
@@ -71,7 +87,9 @@ export async function createReminder(input: ReminderInput, userId = DEFAULT_USER
  * 화면만 바꾸는 게 아니라 서버의 발송 예약을 다시 잡아야 한다.
  * 이미 보낸 건(sent)은 건드리지 않고, 아직 안 보낸 건만 취소한 뒤 새로 건다.
  */
-export async function rescheduleReminder(id: number, remindAt: Date) {
+export async function rescheduleReminder(id: number, remindAt: Date, userId: string) {
+  await requireOwned(id, userId)
+
   const reminder = await prisma.reminder.update({
     where: { id },
     data: { remindAt },
@@ -129,9 +147,8 @@ export async function advanceRepeat(reminderId: number, occurrenceAt: Date): Pro
  * - 반복:  remindAt 을 건드리지 않고 일회성 알림만 하나 더 만든다.
  *          매일 09시 알림을 15분 미뤘다고 내일부터 09시 15분이 되면 안 된다.
  */
-export async function snoozeReminder(id: number, minutes?: number) {
-  const reminder = await prisma.reminder.findUnique({ where: { id } })
-  if (!reminder) throw new Error('리마인더를 찾을 수 없습니다.')
+export async function snoozeReminder(id: number, userId: string, minutes?: number) {
+  const reminder = await requireOwned(id, userId)
 
   const wait = minutes ?? reminder.snoozeMinutes
   const at = new Date(Date.now() + wait * 60_000)
@@ -139,7 +156,7 @@ export async function snoozeReminder(id: number, minutes?: number) {
   if (!reminder.repeatRule) {
     // 예정 시각이 아직 더 뒤라면 그대로 둔다. 미루기가 앞당기기가 되면 안 된다.
     if (reminder.remindAt.getTime() > at.getTime()) return reminder
-    return rescheduleReminder(id, at)
+    return rescheduleReminder(id, at, userId)
   }
 
   // occurrenceAt 을 미룬 시각 자체로 두면 여러 번 미뤄도 서로 부딪히지 않는다.
@@ -157,9 +174,8 @@ export async function snoozeReminder(id: number, minutes?: number) {
   return reminder
 }
 
-export async function completeReminder(id: number, done = true) {
-  const target = await prisma.reminder.findUnique({ where: { id } })
-  if (!target) throw new Error('리마인더를 찾을 수 없습니다.')
+export async function completeReminder(id: number, done: boolean, userId: string) {
+  const target = await requireOwned(id, userId)
 
   // 반복 리마인더를 완료하면 없애는 게 아니라 다음 회차로 넘긴다.
   // 매일 먹는 약을 오늘 체크했다고 내일치가 사라지면 안 된다.
@@ -195,14 +211,15 @@ export async function completeReminder(id: number, done = true) {
   return reminder
 }
 
-export async function listReminders(userId = DEFAULT_USER, done = false) {
+export async function listReminders(userId: string, done = false) {
   return prisma.reminder.findMany({
     where: { userId, doneAt: done ? { not: null } : null },
     orderBy: { remindAt: done ? 'desc' : 'asc' },
   })
 }
 
-export async function deleteReminder(id: number) {
+export async function deleteReminder(id: number, userId: string) {
+  await requireOwned(id, userId)
   // Notification 은 onDelete: Cascade 라 같이 지워진다.
   await prisma.reminder.delete({ where: { id } })
 }

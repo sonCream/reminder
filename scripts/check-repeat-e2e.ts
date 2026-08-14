@@ -40,11 +40,16 @@ async function main() {
     return
   }
 
+  await prisma.user.upsert({
+    where: { id: 'local' },
+    create: { id: 'local', email: 'local@unclaimed.invalid' },
+    update: {},
+  })
   await prisma.reminder.deleteMany({ where: { userId: 'local' } })
 
   // 1분 전으로 잡아 워커가 즉시 집어가게 한다.
   const due = new Date(Date.now() - 60_000)
-  await createReminder({ title: '약 먹기', remindAt: due, repeatRule: 'daily' })
+  await createReminder({ title: '약 먹기', remindAt: due, repeatRule: 'daily' }, 'local')
 
   console.log('준비 완료. 아래를 차례로 실행하세요.\n')
   console.log('  npx tsx worker/index.ts --once')

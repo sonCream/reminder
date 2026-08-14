@@ -9,6 +9,12 @@ import { createReminder } from '../lib/reminders'
  * 워커가 이걸 집어내면 "서버가 죽어 있던 동안 밀린 알림을 복구한다"는 설계가 실제로 동작하는 것이다.
  */
 async function main() {
+  // 마이그레이션이 만들어 둔 자리 표시 계정을 쓴다.
+  await prisma.user.upsert({
+    where: { id: 'local' },
+    create: { id: 'local', email: 'local@unclaimed.invalid' },
+    update: {},
+  })
   await prisma.reminder.deleteMany({ where: { userId: 'local' } })
 
   const now = Date.now()
@@ -17,19 +23,19 @@ async function main() {
     title: '영양제 챙겨 먹기',
     memo: '지난 알림 — 워커가 밀린 건을 잡아내는지 확인용',
     remindAt: new Date(now - 12 * 60 * 60_000), // 12시간 전
-  })
+  }, 'local')
 
   await createReminder({
     title: '치과 예약 확인 전화',
     memo: '담당 선생님 오후 진료만 가능',
     remindAt: new Date(now + 2 * 60_000), // 2분 뒤
-  })
+  }, 'local')
 
   await createReminder({
     title: '주간 회의',
     remindAt: new Date(now + 3 * 60 * 60_000), // 3시간 뒤
     leadMinutes: 10,
-  })
+  }, 'local')
 
   const reminders = await prisma.reminder.count({ where: { userId: 'local' } })
   const notifications = await prisma.notification.count()
