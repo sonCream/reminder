@@ -63,9 +63,26 @@ async function exchange(key: string): Promise<'ok' | 'unknown' | 'error'> {
   }
 }
 
+/// 이미 쓸 수 있는 세션이 있는지 본다.
+async function hasSession(): Promise<boolean> {
+  try {
+    const response = await fetch('/api/auth/me', { cache: 'no-store' })
+    if (!response.ok) return false
+    const data = (await response.json()) as { user: unknown | null }
+    return data.user !== null
+  } catch {
+    return false
+  }
+}
+
 /// 앱을 열 때 한 번 호출한다. 키가 있으면 세션으로 바꾸고, 없으면 계정을 만든다.
 export async function bootstrapSession(): Promise<BootstrapResult> {
   const existing = readKey()
+
+  // 세션이 살아 있으면 그대로 쓴다.
+  // 확인하지 않고 매번 교환하면 앱을 열 때마다 세션이 쌓여,
+  // "연결된 기기" 가 실제 기기 수와 무관하게 계속 늘어난다.
+  if (existing && (await hasSession())) return { status: 'ok' }
 
   if (existing) {
     const result = await exchange(existing)
@@ -76,7 +93,12 @@ export async function bootstrapSession(): Promise<BootstrapResult> {
 
   try {
     const response = await fetch('/api/auth/key/new', { method: 'POST' })
-    if (!response.ok) return { status: 'error', reason: '계정을 만들지 못했습니다.' }
+    if (!response.ok) {
+      // 서버가 알려주는 원인을 그대로 보여준다. 원인 없이 "실패했습니다"만 뜨면
+      // 무엇을 확인해야 할지 알 수 없다.
+      const body = (await response.json().catch(() => ({}))) as { error?: string }
+      return { status: 'error', reason: body.error ?? '계정을 만들지 못했습니다.' }
+    }
 
     const data = (await response.json()) as { key: string }
     if (!writeKey(data.key)) return { status: 'storage-blocked' }

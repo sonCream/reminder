@@ -75,6 +75,14 @@ export async function rotateKey(userId: string, keepSessionId?: string): Promise
   return key
 }
 
+/// 지금 기기만 남기고 나머지 연결을 끊는다. 키는 그대로 쓴다.
+export async function revokeOtherSessions(userId: string, keepSessionId: string): Promise<number> {
+  const { count } = await prisma.session.deleteMany({
+    where: { userId, id: { not: keepSessionId } },
+  })
+  return count
+}
+
 /// 아직 키가 없는 계정(인증 도입 전 데이터)에 키를 발급한다.
 /// 서버에서 scripts/issue-key.ts 로만 실행한다 — 앱에서는 부르지 않는다.
 export async function issueKeyForLegacyUser(userId: string): Promise<string> {

@@ -134,6 +134,24 @@ export function SettingsScreen() {
     }
   }, [])
 
+  async function revokeOthers() {
+    setBusy(true)
+    setMessage(null)
+    try {
+      const response = await fetch('/api/auth/sessions', { method: 'DELETE' })
+      const data = await response.json()
+      setMessage(
+        response.ok
+          ? { ok: true, text: `${data.removed}개 연결을 끊었습니다.` }
+          : { ok: false, text: '연결을 끊지 못했습니다.' },
+      )
+    } catch {
+      setMessage({ ok: false, text: '서버에 연결하지 못했습니다.' })
+    }
+    await refresh()
+    setBusy(false)
+  }
+
   async function makeNewKey() {
     if (!window.confirm('키를 새로 만들면 예전 키는 쓸 수 없게 되고, 다른 기기의 연결도 끊깁니다. 계속할까요?')) {
       return
@@ -228,9 +246,21 @@ export function SettingsScreen() {
             <div className="setting">
               <div className="setting-body">
                 <span className="setting-name">연결된 기기</span>
+                <span className="setting-sub">이 키로 접속해 있는 브라우저 수입니다.</span>
               </div>
               <span className="val">{devices === null ? '—' : `${devices}대`}</span>
             </div>
+            {devices !== null && devices > 1 && (
+              <div className="setting">
+                <div className="setting-body">
+                  <span className="setting-name">다른 기기 연결 끊기</span>
+                  <span className="setting-sub">지금 이 기기만 남깁니다. 키는 그대로 쓸 수 있습니다.</span>
+                </div>
+                <button className="action-btn ghost" style={{ width: 'auto' }} onClick={revokeOthers} disabled={busy}>
+                  끊기
+                </button>
+              </div>
+            )}
           </div>
 
           {shownKey ? (

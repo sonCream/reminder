@@ -10,7 +10,8 @@ export async function GET() {
   if (!user) return NextResponse.json({ user: null })
 
   const [devices, createdAt] = await Promise.all([
-    prisma.session.count({ where: { userId: user.id } }),
+    // 만료된 세션은 세지 않는다. 정리는 그 세션이 쓰일 때 일어나므로 남아 있을 수 있다.
+    prisma.session.count({ where: { userId: user.id, expiresAt: { gt: new Date() } } }),
     prisma.user.findUnique({ where: { id: user.id }, select: { createdAt: true } }),
   ])
 
