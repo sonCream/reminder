@@ -12,7 +12,7 @@ async function main() {
   // 마이그레이션이 만들어 둔 자리 표시 계정을 쓴다.
   await prisma.user.upsert({
     where: { id: 'local' },
-    create: { id: 'local', email: 'local@unclaimed.invalid' },
+    create: { id: 'local' },
     update: {},
   })
   await prisma.reminder.deleteMany({ where: { userId: 'local' } })

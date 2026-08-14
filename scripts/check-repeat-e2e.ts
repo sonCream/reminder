@@ -42,7 +42,7 @@ async function main() {
 
   await prisma.user.upsert({
     where: { id: 'local' },
-    create: { id: 'local', email: 'local@unclaimed.invalid' },
+    create: { id: 'local' },
     update: {},
   })
   await prisma.reminder.deleteMany({ where: { userId: 'local' } })

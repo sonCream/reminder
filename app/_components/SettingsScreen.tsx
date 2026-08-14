@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { currentSubscription, disablePush, enablePush } from '@/lib/push-client'
+import { clearKey, rotateKey } from '@/lib/auth-client'
+import { KeyBox } from './KeyBox'
 
 type State = 'ok' | 'warn' | 'off'
 type Platform = 'android' | 'ios' | 'desktop'
@@ -111,7 +113,10 @@ export function SettingsScreen() {
   const [busy, setBusy] = useState(false)
   const [platform, setPlatform] = useState<Platform | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
-  const [email, setEmail] = useState<string | null>(null)
+  const [devices, setDevices] = useState<number | null>(null)
+  /// 키는 서버에 해시만 있어서 다시 가져올 수 없다.
+  /// 이 기기에 저장된 값을 그대로 보여주거나, 새로 발급받았을 때만 채워진다.
+  const [shownKey, setShownKey] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     setPermission(typeof Notification === 'undefined' ? '미지원' : Notification.permission)
@@ -123,19 +128,40 @@ export function SettingsScreen() {
     try {
       const response = await fetch('/api/auth/me', { cache: 'no-store' })
       const data = await response.json()
-      setEmail(data.user?.email ?? null)
+      setDevices(data.user?.devices ?? null)
     } catch {
-      setEmail(null)
+      setDevices(null)
     }
   }, [])
 
-  async function logout() {
+  async function makeNewKey() {
+    if (!window.confirm('키를 새로 만들면 예전 키는 쓸 수 없게 되고, 다른 기기의 연결도 끊깁니다. 계속할까요?')) {
+      return
+    }
     setBusy(true)
-    // 이 기기의 푸시 구독도 함께 정리한다.
-    // 그러지 않으면 로그아웃해도 알림이 계속 온다.
+    setMessage(null)
+    const result = await rotateKey()
+    setBusy(false)
+
+    if (!result.ok) {
+      setMessage({ ok: false, text: result.reason ?? '키를 새로 만들지 못했습니다.' })
+      return
+    }
+    setShownKey(result.key ?? null)
+    setMessage({ ok: true, text: '새 키를 만들었습니다. 아래 값을 다시 보관해 주세요.' })
+    await refresh()
+  }
+
+  async function disconnect() {
+    if (!window.confirm('이 기기에서 계정 연결을 끊습니다. 키를 보관해 두지 않았다면 다시 들어올 수 없습니다. 계속할까요?')) {
+      return
+    }
+    setBusy(true)
+    // 이 기기의 푸시 구독도 함께 정리한다. 그러지 않으면 연결을 끊어도 알림이 계속 온다.
     await disablePush().catch(() => {})
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
-    window.location.href = '/login'
+    clearKey()
+    window.location.reload()
   }
 
   useEffect(() => {
@@ -193,13 +219,45 @@ export function SettingsScreen() {
           <div className="fld">
             <div className="setting">
               <div className="setting-body">
-                <span className="setting-name">로그인</span>
-                <span className="setting-sub">{email ?? '확인 중…'}</span>
+                <span className="setting-name">가입 없이 사용 중</span>
+                <span className="setting-sub">
+                  이메일도 비밀번호도 받지 않습니다. 이 기기에 보관된 키가 계정을 대신합니다.
+                </span>
               </div>
             </div>
+            <div className="setting">
+              <div className="setting-body">
+                <span className="setting-name">연결된 기기</span>
+              </div>
+              <span className="val">{devices === null ? '—' : `${devices}대`}</span>
+            </div>
           </div>
-          <button className="action-btn ghost" onClick={logout} disabled={busy}>
-            로그아웃
+
+          {shownKey ? (
+            <>
+              <KeyBox value={shownKey} />
+              <button className="action-btn ghost" onClick={() => setShownKey(null)}>
+                가리기
+              </button>
+            </>
+          ) : (
+            <button
+              className="action-btn ghost"
+              onClick={() => setShownKey(localStorage.getItem('reminder.accountKey'))}
+            >
+              키 보기 · 다른 기기에 추가
+            </button>
+          )}
+
+          <button className="action-btn ghost" onClick={makeNewKey} disabled={busy}>
+            키 새로 만들기
+          </button>
+          <p className="hint">
+            키가 다른 사람에게 노출됐을 때 씁니다. 예전 키는 즉시 무효가 되고 다른 기기의 연결도 끊깁니다.
+          </p>
+
+          <button className="del-btn" onClick={disconnect} disabled={busy}>
+            이 기기에서 연결 끊기
           </button>
         </div>
 

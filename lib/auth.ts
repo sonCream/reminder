@@ -1,131 +1,91 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { cookies } from 'next/headers'
 import { prisma } from './prisma'
 import { SESSION_COOKIE } from './session-cookie'
 
 /**
- * 매직 링크 인증.
+ * 키 기반 익명 계정.
  *
- * 비밀번호를 두지 않는다. 메일로 받은 1회용 링크를 눌러 본인임을 증명한다.
- * 저장하는 비밀이 없으니 유출될 것도, 재설정 화면도 필요 없다.
+ * 이메일도 비밀번호도 받지 않는다. 앱이 처음 실행될 때 서버가 무작위 키를 발급하고,
+ * 기기가 그 키를 보관한다. 키를 가진 사람이 곧 그 계정이다.
+ *
+ * 서버는 이 계정이 누구인지 알지 못한다. 대신 키를 잃으면 복구할 방법이 없어서,
+ * 설정 화면에서 키를 꺼내 백업하거나 다른 기기로 옮길 수 있게 해 둔다.
  */
 
 export { SESSION_COOKIE }
 
 const SESSION_DAYS = 30
-const TOKEN_MINUTES = 15
-/// 인증을 붙이기 전에 쌓인 데이터가 이 id 로 묶여 있다.
-const LEGACY_USER_ID = 'local'
-const LEGACY_EMAIL = 'local@unclaimed.invalid'
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-export function normalizeEmail(raw: string): string {
-  return raw.trim().toLowerCase()
+/// 손으로 옮겨 적을 때 섞여 들어가는 공백·줄바꿈을 걷어낸다.
+export function normalizeKey(raw: string): string {
+  return raw.replace(/\s+/g, '')
 }
 
-function splitList(raw: string | undefined): string[] {
-  return (raw ?? '')
-    .split(',')
-    .map((s) => normalizeEmail(s).replace(/^@/, ''))
-    .filter(Boolean)
+function generateKey(): string {
+  return randomBytes(32).toString('base64url')
+}
+
+/* ---------------------------------------------------------------- */
+/* 계정                                                              */
+/* ---------------------------------------------------------------- */
+
+export interface IssuedKey {
+  userId: string
+  /// ⚠️ 원본 키. 이 순간에만 존재한다. 서버에는 해시만 남는다.
+  key: string
+}
+
+/// 새 계정을 만들고 키를 발급한다.
+export async function createAccount(): Promise<IssuedKey> {
+  const key = generateKey()
+  const user = await prisma.user.create({
+    data: { keyHash: sha256(key), lastLoginAt: new Date() },
+  })
+  return { userId: user.id, key }
+}
+
+/// 키에 해당하는 계정을 찾는다. 없으면 null.
+export async function resolveKey(rawKey: string): Promise<string | null> {
+  const key = normalizeKey(rawKey)
+  if (key.length === 0) return null
+
+  const user = await prisma.user.findUnique({ where: { keyHash: sha256(key) } })
+  return user?.id ?? null
 }
 
 /**
- * 로그인을 허용할지 판단한다.
+ * 키를 새로 발급하고 이전 키를 무효로 만든다.
  *
- * 두 가지를 함께 본다. 둘 중 하나라도 걸리면 통과다.
- *   AUTH_ALLOWED_DOMAINS — 회사 도메인 단위로 열어둘 때. 사람이 늘어도 설정을 안 고쳐도 된다.
- *   AUTH_ALLOWED_EMAILS  — 특정 주소만 콕 집어 허용할 때.
- *
- * ⚠️ 둘 다 비워 두면 누구나 계정을 만들 수 있다.
- *    인터넷에 열려 있는 주소이므로 운영에서는 최소 하나는 설정한다.
+ * 키가 유출됐을 때 계정을 버리지 않고 되찾는 유일한 수단이다.
+ * 다른 기기의 세션도 함께 끊어야 실제로 되찾는 것이 된다.
  */
-export function emailAllowed(email: string): boolean {
-  const normalized = normalizeEmail(email)
-  const domains = splitList(process.env.AUTH_ALLOWED_DOMAINS)
-  const emails = splitList(process.env.AUTH_ALLOWED_EMAILS)
+export async function rotateKey(userId: string, keepSessionId?: string): Promise<string> {
+  const key = generateKey()
+  await prisma.user.update({ where: { id: userId }, data: { keyHash: sha256(key) } })
 
-  if (domains.length === 0 && emails.length === 0) return true
-
-  if (emails.includes(normalized)) return true
-
-  const domain = normalized.split('@')[1] ?? ''
-  return domains.includes(domain)
-}
-
-/* ---------------------------------------------------------------- */
-/* 로그인 토큰                                                        */
-/* ---------------------------------------------------------------- */
-
-/// 1회용 로그인 토큰을 만들고 원본을 돌려준다.
-/// ⚠️ DB 에는 해시만 남는다. DB 를 볼 수 있어도 남의 계정에 로그인할 수 없다.
-export async function createLoginToken(email: string): Promise<string> {
-  const token = randomBytes(32).toString('base64url')
-
-  await prisma.loginToken.create({
-    data: {
-      email: normalizeEmail(email),
-      tokenHash: sha256(token),
-      expiresAt: new Date(Date.now() + TOKEN_MINUTES * 60_000),
-    },
+  await prisma.session.deleteMany({
+    where: { userId, ...(keepSessionId ? { id: { not: keepSessionId } } : {}) },
   })
 
-  return token
+  return key
 }
 
-/// 토큰을 소모하고 이메일을 돌려준다. 이미 썼거나 만료됐으면 null.
-export async function consumeLoginToken(token: string): Promise<string | null> {
-  const row = await prisma.loginToken.findUnique({ where: { tokenHash: sha256(token) } })
-  if (!row || row.usedAt || row.expiresAt.getTime() < Date.now()) return null
-
-  // 조건부 갱신이라 링크를 두 번 눌러도 한 번만 통과한다.
-  const { count } = await prisma.loginToken.updateMany({
-    where: { id: row.id, usedAt: null },
-    data: { usedAt: new Date() },
-  })
-  if (count !== 1) return null
-
-  return row.email
+/// 아직 키가 없는 계정(인증 도입 전 데이터)에 키를 발급한다.
+/// 서버에서 scripts/issue-key.ts 로만 실행한다 — 앱에서는 부르지 않는다.
+export async function issueKeyForLegacyUser(userId: string): Promise<string> {
+  const key = generateKey()
+  await prisma.user.update({ where: { id: userId }, data: { keyHash: sha256(key) } })
+  return key
 }
 
 /* ---------------------------------------------------------------- */
-/* 사용자 · 세션                                                      */
+/* 세션                                                              */
 /* ---------------------------------------------------------------- */
-
-/**
- * 이메일로 사용자를 찾거나 만든다.
- *
- * 인증을 붙이기 전에 쌓인 데이터는 'local' 계정에 묶여 있다.
- * 그 데이터를 아무나 가져가면 안 되므로 AUTH_OWNER_EMAIL 로 주인을 지정한다.
- * 설정하지 않으면 첫 로그인이 가져간다 — 개발 편의를 위한 기본값이라,
- * 운영에서는 반드시 설정해야 한다.
- */
-export async function findOrCreateUser(email: string): Promise<string> {
-  const normalized = normalizeEmail(email)
-
-  const existing = await prisma.user.findUnique({ where: { email: normalized } })
-  if (existing) return existing.id
-
-  const owner = process.env.AUTH_OWNER_EMAIL
-  const mayClaim = !owner || normalizeEmail(owner) === normalized
-
-  if (mayClaim) {
-    const legacy = await prisma.user.findUnique({ where: { id: LEGACY_USER_ID } })
-    if (legacy && legacy.email === LEGACY_EMAIL) {
-      const claimed = await prisma.user.update({
-        where: { id: LEGACY_USER_ID },
-        data: { email: normalized },
-      })
-      return claimed.id
-    }
-  }
-
-  const created = await prisma.user.create({ data: { email: normalized } })
-  return created.id
-}
 
 export async function createSession(userId: string, userAgent?: string | null): Promise<string> {
   const id = randomBytes(32).toString('base64url')
@@ -145,15 +105,14 @@ export async function createSession(userId: string, userAgent?: string | null): 
 
 export interface SessionUser {
   id: string
-  email: string
+  sessionId: string
 }
 
-/// 현재 요청의 로그인 사용자. 없으면 null.
 export async function getSessionUser(): Promise<SessionUser | null> {
   const id = (await cookies()).get(SESSION_COOKIE)?.value
   if (!id) return null
 
-  const session = await prisma.session.findUnique({ where: { id }, include: { user: true } })
+  const session = await prisma.session.findUnique({ where: { id } })
   if (!session) return null
 
   if (session.expiresAt.getTime() < Date.now()) {
@@ -161,21 +120,21 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     return null
   }
 
-  return { id: session.user.id, email: session.user.email }
-}
-
-/// API 라우트에서 쓴다. 로그인하지 않았으면 예외를 던진다.
-export async function requireUser(): Promise<SessionUser> {
-  const user = await getSessionUser()
-  if (!user) throw new UnauthorizedError()
-  return user
+  return { id: session.userId, sessionId: session.id }
 }
 
 export class UnauthorizedError extends Error {
   constructor() {
-    super('로그인이 필요합니다.')
+    super('세션이 없습니다.')
     this.name = 'UnauthorizedError'
   }
+}
+
+/// API 라우트에서 쓴다. 세션이 없으면 예외를 던진다.
+export async function requireUser(): Promise<SessionUser> {
+  const user = await getSessionUser()
+  if (!user) throw new UnauthorizedError()
+  return user
 }
 
 export async function destroySession(): Promise<void> {
@@ -195,17 +154,7 @@ export function sessionCookieOptions() {
   }
 }
 
-/// 만료된 세션·토큰 정리. 워커가 주기적으로 부른다.
+/// 만료된 세션 정리.
 export async function cleanupExpired(): Promise<void> {
-  const now = new Date()
-  await prisma.session.deleteMany({ where: { expiresAt: { lt: now } } })
-  await prisma.loginToken.deleteMany({ where: { expiresAt: { lt: now } } })
-}
-
-/// 타이밍 차이로 토큰을 추측하지 못하게 한다.
-export function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a)
-  const bufB = Buffer.from(b)
-  if (bufA.length !== bufB.length) return false
-  return timingSafeEqual(bufA, bufB)
+  await prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } })
 }

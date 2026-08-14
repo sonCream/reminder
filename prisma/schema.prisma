@@ -12,13 +12,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// 로그인한 사람.
+/// 계정.
 ///
-/// 비밀번호를 두지 않는다. 메일로 받은 링크를 눌러 본인임을 증명한다(매직 링크).
-/// 비밀번호를 저장하지 않으니 유출될 것도 없고, 재설정 화면도 필요 없다.
+/// 이메일도 비밀번호도 받지 않는다. 앱이 처음 실행될 때 기기가 무작위 키를 만들고,
+/// 그 키를 가진 사람이 곧 이 계정이다. 서버는 이 계정이 누구인지 알지 못한다.
+///
+/// 대신 키를 잃으면 복구할 방법이 없다. 그래서 설정 화면에서 키를 꺼내
+/// 백업하거나 다른 기기로 옮길 수 있게 해 둔다.
 model User {
-  id    String @id @default(cuid())
-  email String @unique
+  id String @id @default(cuid())
+
+  /// ⚠️ 원본이 아니라 해시를 저장한다. DB 를 들여다볼 수 있어도 남의 계정이 되지 못한다.
+  /// 인증을 붙이기 전에 쌓인 데이터를 가진 계정은 키가 아직 없어 null 이다.
+  keyHash String? @unique
 
   createdAt   DateTime  @default(now()) @db.Timestamptz(3)
   lastLoginAt DateTime? @db.Timestamptz(3)
@@ -42,22 +48,6 @@ model Session {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([userId])
-  @@index([expiresAt])
-}
-
-/// 메일로 보낸 1회용 로그인 링크.
-model LoginToken {
-  id    String @id @default(cuid())
-  email String
-
-  /// ⚠️ 원본이 아니라 해시를 저장한다.
-  /// DB 를 들여다볼 수 있는 사람이 남의 계정에 로그인하지 못하게 한다.
-  tokenHash String    @unique
-  expiresAt DateTime  @db.Timestamptz(3)
-  usedAt    DateTime? @db.Timestamptz(3)
-  createdAt DateTime  @default(now()) @db.Timestamptz(3)
-
-  @@index([email])
   @@index([expiresAt])
 }
 
