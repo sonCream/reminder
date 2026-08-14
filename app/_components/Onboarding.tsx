@@ -42,6 +42,7 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
   const [flags, setFlags] = useState(() => ({ popupAck: false, keyBackedUp: false, hidden: false }))
   const [showKey, setShowKey] = useState(false)
   const [showPopupHelp, setShowPopupHelp] = useState(false)
+  const [testSent, setTestSent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -94,6 +95,25 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
 
   function mark(patch: Parameters<typeof patchOnboarding>[0]) {
     setFlags(patchOnboarding(patch))
+  }
+
+  /// 팝업 설정은 알림을 길게 눌러 들어가는 게 기종을 안 타는 유일한 방법이다.
+  /// 그러려면 길게 누를 알림이 하나 있어야 해서 여기서 바로 보낸다.
+  async function sendTestNotification() {
+    setBusy(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/push/test', { method: 'POST' })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        setError(data.error ?? '알림을 보내지 못했습니다. 먼저 알림을 켜 주세요.')
+      } else {
+        setTestSent(true)
+      }
+    } catch {
+      setError('서버에 연결하지 못했습니다.')
+    }
+    setBusy(false)
   }
 
   const steps: Step[] = []
@@ -158,16 +178,41 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
       done: flags.popupAck,
       action: (
         <>
+          <div className="ios-guide">
+            <p>
+              <b>1.</b> 아래 버튼으로 알림을 하나 받습니다
+              <br />
+              <b>2.</b> 상단바를 내려 그 알림을 <b>길게 누릅니다</b>
+              <br />
+              <b>3.</b> 나타나는 <b>톱니바퀴(⚙)</b>를 누릅니다
+              <br />
+              <b>4.</b> <b>긴급</b> 또는 <b>알림 팝업</b>을 켭니다
+            </p>
+            <p className="hint">
+              기종마다 문구가 다릅니다. <b>팝업</b>·<b>긴급</b>·<b>소리 및 팝업</b> 중 보이는 것을 고르면 됩니다.
+            </p>
+          </div>
+
+          <button className="action-btn ghost" onClick={sendTestNotification} disabled={busy}>
+            {testSent ? '다시 보내기' : '테스트 알림 보내기'}
+          </button>
+
           {showPopupHelp ? (
             <div className="ios-guide">
-              <p className="path">설정 → 앱 → 리마인더 → 알림 → <b>일반</b> → 알림 팝업 켜기</p>
-              <p className="hint">⚠️ <b>일반</b>을 한 번 더 눌러야 팝업 설정이 나옵니다.</p>
+              <p className="hint">
+                알림을 길게 눌러도 톱니바퀴가 없다면 설정에서 찾습니다.
+                <br />
+                경로는 기종마다 다르니 <b>설정 검색창에 &lsquo;리마인더&rsquo;</b>를 입력하는 편이 빠릅니다.
+              </p>
+              <p className="path">설정 → 앱 → 리마인더 → 알림 → (채널 선택) → 팝업 켜기</p>
+              <p className="hint">⚠️ 채널(보통 <b>일반</b>)을 한 번 더 눌러야 팝업 설정이 나옵니다.</p>
             </div>
           ) : (
             <button className="action-btn ghost" onClick={() => setShowPopupHelp(true)}>
-              설정 여는 법 보기
+              톱니바퀴가 안 보이면
             </button>
           )}
+
           <button className="action-btn" onClick={() => mark({ popupAck: true })}>
             했어요
           </button>
