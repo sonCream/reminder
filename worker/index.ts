@@ -54,7 +54,9 @@ async function tick(): Promise<void> {
         userId: n.reminder.userId,
         reminderId: n.reminderId,
         title: n.reminder.title,
-        body: n.reminder.memo ?? '리마인더 시간입니다.',
+        // 메모가 없으면 본문을 비운다. 채우려고 넣은 안내 문구는
+        // 매번 똑같이 반복돼서 정작 제목을 읽는 데 방해가 된다.
+        body: n.reminder.memo ?? '',
         url: `/?reminder=${n.reminderId}`,
         badgeCount: await badgeCount(n.reminder.userId),
         snoozeMinutes: n.reminder.snoozeMinutes,

@@ -30,7 +30,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     (async () => {
       await self.registration.showNotification(data.title || '리마인더', {
-        body: data.body || '리마인더 시간입니다.',
+        // 메모가 없으면 제목만 보여준다.
+        body: data.body || '',
         icon: '/icons/icon-192.png',
         badge: '/icons/icon-192.png',
         // 회차마다 다른 값이어야 한다.

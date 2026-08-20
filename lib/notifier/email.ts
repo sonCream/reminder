@@ -9,6 +9,6 @@ export class EmailNotifier implements Notifier {
     const to = process.env.MAIL_TO ?? process.env.SMTP_USER
     if (!to) throw new Error('받는 주소가 없습니다. MAIL_TO 또는 SMTP_USER를 설정하세요.')
 
-    await sendMail({ to, subject: payload.title, text: payload.body })
+    await sendMail({ to, subject: payload.title, text: payload.body || payload.title })
   }
 }
